@@ -20,4 +20,3 @@ install:
 
 script:
   - sh run_tests.sh
-
