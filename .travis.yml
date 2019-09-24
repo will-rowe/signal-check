@@ -19,5 +19,5 @@ install:
   - conda activate test-environment
 
 script:
-  - sh tests/test_basic.sh
+  - sh run_tests.sh
 
