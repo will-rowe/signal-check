@@ -1,0 +1,9 @@
+name: polishingWithSignal
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - bwa =0.7.17
+  - nanopolish =0.10.2
+  - samtools =1.9

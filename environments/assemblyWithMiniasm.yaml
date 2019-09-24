@@ -1,0 +1,6 @@
+name: assemblyWithMiniasm
+channels:
+  - bioconda
+dependencies:
+  - miniasm =0.3_r179
+  - minimap2 =2.17
