@@ -15,8 +15,8 @@ install:
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
   - conda info -a
-  - conda create -q -n test-environment -c bioconda python=$TRAVIS_PYTHON_VERSION nextflow
-  - conda activate test-environment
+  - conda env create -q -f environments/travis-testing.yaml
+  - conda activate travis-testing
 
 script:
   - sh run_tests.sh
