@@ -21,5 +21,3 @@ install:
 script:
   - sh tests/test_basic.sh
 
-after_failure:
-  - cat .nextflow.log
