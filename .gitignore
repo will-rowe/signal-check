@@ -2,4 +2,6 @@
 .nextflow/
 .nextflow.log*
 .nextflow.history
+.ipynb_checkpoints/
 work/
+results/

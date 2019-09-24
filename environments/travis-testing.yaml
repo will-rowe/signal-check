@@ -8,6 +8,7 @@ dependencies:
   - porechop =0.2.3_seqan2.1.1
   - python=3.6
   - numpy=1.16.1
+  - miniasm =0.3_r179
   - minimap2 =2.17
   - racon =1.4.3
   - medaka =0.9.1
