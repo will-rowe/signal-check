@@ -20,3 +20,4 @@ dependencies:
   - fastani =1.2
   - pip:
     - ncbi-genome-download==0.2.11
+    - seaborn==0.9.0

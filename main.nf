@@ -26,11 +26,13 @@ log.info "========================================="
 
 def summary = [:]
 summary['Reads']        = params.reads
-summary['Fast5']        = params.fast5
-summary['Output Dir']   = params.output
-summary['Working Dir']  = workflow.workDir
-summary['Max Memory']   = params.mem
-summary['Max CPUs']     = params.cpus
+summary['Fast5 dir']        = params.fast5
+summary['Racon iterat.'] = params.raconRounds
+summary['Medaka model'] = params.medakaModel
+summary['Output dir']   = params.output
+summary['Working dir']  = workflow.workDir
+summary['Max. memory']   = params.mem
+summary['Max. CPUs']     = params.cpus
 summary['Profile'] = workflow.profile
 summary['Current home']   = "$HOME"
 summary['Current user']   = "$USER"
@@ -99,7 +101,7 @@ assembly.into { assembly_for_polishing; assembly_for_signal_based_polishing }
 */
 process polishingWithoutSignal {
 	publishDir params.output, mode: 'copy', pattern: 'assembly-polished-without-using-signal.fasta'
-
+    echo true
     input:
         file(assembly) from assembly_for_polishing
     	file(reads) from trimmed_reads_for_polishing
@@ -112,7 +114,8 @@ process polishingWithoutSignal {
         minimap2 -x map-ont -t "${task.cpus}" "${assembly}" "${reads}" > assembly-racon1.paf
         racon -t "${task.cpus}" "${reads}" assembly-racon1.paf "${assembly}" > assembly-racon1.fasta
 
-        for i in {1..3}
+        remainingRounds="\$((${params.raconRounds}-1))"
+        for (( i=1; i<=\$remainingRounds; i++ ))
         do
             ii=\$(( \$i + 1 ))
             minimap2 -x map-ont -t "${task.cpus}" assembly-racon\$i.fasta "${reads}" > assembly-racon\$ii.paf
@@ -145,10 +148,11 @@ process polishingWithSignal {
         if (params.fast5 != '')
             """
             nanopolish index -d "${fast5_dir}" "${reads}"
-            bwa index "${assembly}"
-            bwa mem -x ont2d -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o reads.sorted.bam -T reads.tmp -
+
+            minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o reads.sorted.bam -T reads.tmp -
             samtools index reads.sorted.bam
-            nanopolish_makerange.py "${assembly}" | parallel --results nanopolish.results -P "${task.cpus}" nanopolish variants --consensus polished.{1}.fa -w {1} -r "${reads}" -b reads.sorted.bam -g "${assembly}" -t 1 --min-candidate-frequency 0.1
+            nanopolish_makerange.py "${assembly}" | \
+            parallel --results nanopolish.results -P "${task.cpus}" nanopolish variants --consensus polished.{1}.fa -w {1} -r "${reads}" -b reads.sorted.bam -g "${assembly}" -t 1 --min-candidate-frequency 0.1
             nanopolish_merge.py polished.*.fa > assembly-polished-using-signal.fasta
             """
         else
