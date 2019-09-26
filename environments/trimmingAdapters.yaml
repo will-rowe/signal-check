@@ -1,4 +1,4 @@
-name: adapterTrimming
+name: trimmingAdapters
 channels:
   - bioconda
 dependencies:

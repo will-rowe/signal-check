@@ -51,9 +51,9 @@ workflow.onComplete {
 }
 
 /*
-    do some adapterTrimming with porechop
+    do some trimmingAdapters with porechop
 */
-process adapterTrimming {
+process trimmingAdapters {
     input:
 	   file(reads) from file(params.reads)
 
@@ -72,7 +72,7 @@ trimmed_reads.into { trimmed_reads_for_assembly; trimmed_reads_for_polishing }
 /*
     do an assembly with miniasm or redbean
 */
-process assembly {
+process assemblingReads {
     publishDir params.output, mode: 'copy', pattern: 'assembly-unpolished.fasta'
     echo true
 
@@ -179,6 +179,7 @@ process polishingWithSignal {
         if (params.fast5 != '')
             """
             nanopolish index -d "${fast5_dir}" "${reads}"
+            samtools index "${bam}"
             nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b "${bam}" -g "${assembly}" -o polished.vcf
             nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > assembly-polished-using-signal.fasta;
 
