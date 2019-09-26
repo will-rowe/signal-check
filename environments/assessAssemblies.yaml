@@ -1,4 +1,4 @@
-name: assemblyAssessment
+name: assessAssemblies
 channels:
   - bioconda
   - conda-forge

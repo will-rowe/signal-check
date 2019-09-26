@@ -182,22 +182,24 @@ process polishingWithSignal {
 /*
     do some assessment of assemblies
 */
-process assemblyAssessment {
-    publishDir params.output, mode: 'copy', pattern: 'quast_nanopolish.tar'
+process assessAssemblies {
+    publishDir params.output, mode: 'copy', pattern: 'quast_reports.tar'
 
     input:
-        file(assembly) from assembly_polished_using_signal
+        file(assembly1) from assembly_polished_without_using_signal
+        file(assembly2) from assembly_polished_using_signal
 
     output:
-        file('quast_nanopolish.tar') into assembly_assessed
+        file('quast_reports.tar') into assembly_assessed
 
     script:
         """
-        quast.py -o quast_nanopolish -t "${task.cpus}" --circos "${assembly}"
-        tar -cvf quast_nanopolish.tar quast_nanopolish
+        quast.py -o quast_polished_without_signal -t "${task.cpus}" --circos "${assembly1}"
+        quast.py -o quast_polished_with_signal -t "${task.cpus}" --circos "${assembly2}"
+
+        mkdir quast_reports
+        mv quast_polished_without_signal quast_reports/
+        mv quast_polished_with_signal quast_reports/
+        tar -cvf quast_reports.tar quast_reports
         """
 }
-
-
-
-
