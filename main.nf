@@ -86,17 +86,17 @@ process assembly {
         if(params.assembler == 'miniasm')
             """
             echo "[info] using miniasm for assembly"
-            minimap2 -x ava-ont -t "${task.cpus}" "${reads}" "${reads}" > "${reads}.paf"
-            miniasm -f "${reads}" "${reads}.paf" > "${reads}.gfa"
+            minimap2 -x ava-ont -F 200 -t "${task.cpus}" "${reads}" "${reads}" > "${reads}.paf"
+            miniasm -e2 -n1 -s 500 -R -f "${reads}" "${reads}.paf" > "${reads}.gfa"
             awk '/^S/{print ">"\$2"\\n"\$3}' "${reads}.gfa" | fold > assembly-unpolished.fasta
             """
         else if(params.assembler == 'redbean')
             """
             echo "[info] using readbean for assembly (not impl. yet)"
 
-
-            minimap2 -x ava-ont -t "${task.cpus}" "${reads}" "${reads}" > "${reads}.paf"
-            miniasm -f "${reads}" "${reads}.paf" > "${reads}.gfa"
+            echo "[info] using miniasm for assembly"
+            minimap2 -x ava-ont -F 200 -t "${task.cpus}" "${reads}" "${reads}" > "${reads}.paf"
+            miniasm -e2 -n1 -s 500 -R -f "${reads}" "${reads}.paf" > "${reads}.gfa"
             awk '/^S/{print ">"\$2"\\n"\$3}' "${reads}.gfa" | fold > assembly-unpolished.fasta
             """
 }
