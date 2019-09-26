@@ -101,11 +101,33 @@ process assembly {
             """
 }
 
-// duplicate the assembly channel so that it can be used by multiple downstream processes
-assembly.into { assembly_for_polishing; assembly_for_signal_based_polishing }
+// copy the assembly channel so that it can be used by multiple downstream processes
+assembly.into { assembly_for_polishing; assembly_for_signal_based_polishing; assembly_for_read_subsampling }
 
 /*
-    do some polishing without using the signal (4 rounds racon, 1 round medaka)
+    do some subsampling of the reads
+*/
+process subsamplingReads {
+    input:
+        file(assembly) from assembly_for_read_subsampling
+        file(reads) from file(params.reads)
+
+    output:
+        file('sub_sampled.bam') into subsampled_bam
+        file('sub_sampled.reads.fq') into subsampled_reads
+
+    script:
+        """
+        minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o reads.sorted.bam -T reads.tmp -
+        samtools index reads.sorted.bam
+        subsample_bam --proportional -o sub_sampled reads.sorted.bam 10
+        mv sub_sampled*.bam sub_sampled.bam
+        samtools fastq sub_sampled.bam > sub_sampled.reads.fq
+        """
+}
+
+/*
+    do some polishing without using the signal (X rounds racon, Y round medaka)
 */
 process polishingWithoutSignal {
 	publishDir params.output, mode: 'copy', pattern: 'assembly-polished-without-using-signal.fasta'
@@ -146,7 +168,8 @@ process polishingWithSignal {
 
     input:
         file(assembly) from assembly_for_signal_based_polishing
-        file(reads) from file(params.reads)
+        file(reads) from subsampled_reads
+        file(bam) from subsampled_bam
         val(fast5_dir) from params.fast5
 
     output:
@@ -156,9 +179,9 @@ process polishingWithSignal {
         if (params.fast5 != '')
             """
             nanopolish index -d "${fast5_dir}" "${reads}"
+            nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b "${bam}" -g "${assembly}" -o polished.vcf
+            nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > assembly-polished-using-signal.fasta;
 
-            minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o reads.sorted.bam -T reads.tmp -
-            samtools index reads.sorted.bam
 
             #nanopolish_makerange.py "${assembly}" | parallel --results nanopolish.results -P "${task.cpus}" nanopolish variants --consensus -t 1 -w {1} -r "${reads}" -b reads.sorted.bam -g "${assembly}" -o polished.{1}.vcf
             #for i in polished.*.vcf
@@ -167,9 +190,6 @@ process polishingWithSignal {
             #nanopolish vcf2fasta --skip-checks -g "${assembly}" \$i > \${base}.fasta;
             #done;
             #nanopolish_merge.py polished.*.fasta > assembly-polished-using-signal.fasta
-            
-            nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b reads.sorted.bam -g "${assembly}" -o polished.vcf
-            nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > assembly-polished-using-signal.fasta;
             """
         else
             """

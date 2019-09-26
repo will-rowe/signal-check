@@ -1,13 +1,15 @@
-name: polishingWithSignal
+name: readSubsampling
 channels:
   - bioconda
   - conda-forge
   - defaults
+  - hcc
 dependencies:
   - python =3.6
   - pip
-  - numpy =1.16.1
-  - parallel =20190922
+  - numpy
   - minimap2 =2.17
   - samtools =1.9
-  - nanopolish =0.11.1
+  - porechop =0.2.3_seqan2.1.1
+  - scrappie
+  - pomoxis==0.2.4
