@@ -42,6 +42,14 @@ summary['Script dir']     = workflow.projectDir
 log.info summary.collect { k,v -> "${k.padRight(15)}: $v" }.join("\n")
 log.info "========================================="
 
+// Completition message
+workflow.onComplete {
+    log.info "========================================="
+    log.info "Pipeline completed at: $workflow.complete"
+    log.info "Execution status: ${ workflow.success ? 'OK' : 'failed' }"
+    log.info "Execution duration: $workflow.duration"
+}
+
 /*
     do some adapterTrimming with porechop
 */
@@ -151,9 +159,17 @@ process polishingWithSignal {
 
             minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o reads.sorted.bam -T reads.tmp -
             samtools index reads.sorted.bam
-            nanopolish_makerange.py "${assembly}" | \
-            parallel --results nanopolish.results -P "${task.cpus}" nanopolish variants --consensus polished.{1}.fa -w {1} -r "${reads}" -b reads.sorted.bam -g "${assembly}" -t 1 --min-candidate-frequency 0.1
-            nanopolish_merge.py polished.*.fa > assembly-polished-using-signal.fasta
+
+            #nanopolish_makerange.py "${assembly}" | parallel --results nanopolish.results -P "${task.cpus}" nanopolish variants --consensus -t 1 -w {1} -r "${reads}" -b reads.sorted.bam -g "${assembly}" -o polished.{1}.vcf
+            #for i in polished.*.vcf
+            #do;
+            #base=\${i%%.vcf};
+            #nanopolish vcf2fasta --skip-checks -g "${assembly}" \$i > \${base}.fasta;
+            #done;
+            #nanopolish_merge.py polished.*.fasta > assembly-polished-using-signal.fasta
+            
+            nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b reads.sorted.bam -g "${assembly}" -o polished.vcf
+            nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > assembly-polished-using-signal.fasta;
             """
         else
             """
@@ -162,3 +178,26 @@ process polishingWithSignal {
             touch assembly-polished-using-signal.fasta
             """
 }
+
+/*
+    do some assessment of assemblies
+*/
+process assemblyAssessment {
+    publishDir params.output, mode: 'copy', pattern: 'quast_nanopolish.tar'
+
+    input:
+        file(assembly) from assembly_polished_using_signal
+
+    output:
+        file('quast_nanopolish.tar') into assembly_assessed
+
+    script:
+        """
+        quast.py -o quast_nanopolish -t "${task.cpus}" --circos "${assembly}"
+        tar -cvf quast_nanopolish.tar quast_nanopolish
+        """
+}
+
+
+
+

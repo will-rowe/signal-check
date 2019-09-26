@@ -24,5 +24,6 @@ jupyter notebook analysis.ipynb
 
 ## issues
 
+* full path is needed to the fast5 directory - nanopolish and nextflow aren't playing nicely at the moment
 * travis does not appear to support the conda environment feature of nextflow, so I've created a single environment for CI testing (environments/travis-testing.yaml) 
 * to update an existing notebook-analysis environment: `conda env update -f environments/notebook-analysis.yaml --prune`
