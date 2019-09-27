@@ -8,7 +8,7 @@ This is a pipeline and analysis notebook for checking the usefulness of signal-d
 
 ## running the analysis
 
-* create and activate the conda environment:
+* create and activate the conda environment for the notebook:
   
 ```
 conda env create -f environments/notebook-analysis.yaml 
@@ -21,6 +21,13 @@ conda activate notebook-analysis
 jupyter notebook analysis.ipynb
 ```
 
+## standalone running of the pipeline
+
+If you have nextflow and conda installed, or are using the *notebook-analysis* environment from above, you just need:
+
+```
+nextflow run main.nf --reads path/to/<reads> --fast5 full/path/to/<fast5 directory> --output <output directory> --assembler miniasm -profile conda --cpus 8 --mem 12GB -with-report tracing-report.html
+```
 
 ## issues
 
