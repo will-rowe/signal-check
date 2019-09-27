@@ -27,6 +27,9 @@ log.info "========================================="
 def summary = [:]
 summary['Reads']        = params.reads
 summary['Fast5 dir']        = params.fast5
+if (params.subSamplingDepth != '') {
+    summary['Sampling depth'] = params.subSamplingDepth
+}
 summary['Racon iterat.'] = params.raconRounds
 summary['Medaka model'] = params.medakaModel
 summary['Output dir']   = params.output
@@ -66,8 +69,8 @@ process trimmingAdapters {
         """
 }
 
-// duplicate the trimmed_read channel so that it can be used by multiple downstream processes
-trimmed_reads.into { trimmed_reads_for_assembly; trimmed_reads_for_polishing }
+// copy the trimmed_read channel so that it can be used by multiple downstream processes
+trimmed_reads.into { trimmed_reads_for_assembly; trimmed_reads_for_polishing; trimmed_reads_for_subsampling  }
 
 /*
     do an assembly with miniasm or redbean
@@ -110,20 +113,28 @@ assembly.into { assembly_for_polishing; assembly_for_signal_based_polishing; ass
 process subsamplingReads {
     input:
         file(assembly) from assembly_for_read_subsampling
-        file(reads) from file(params.reads)
+        file(reads) from trimmed_reads_for_subsampling
 
     output:
         file('sub_sampled.bam') into subsampled_bam
         file('sub_sampled.reads.fq') into subsampled_reads
 
     script:
-        """
-        minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o reads.sorted.bam -T reads.tmp -
-        samtools index reads.sorted.bam
-        subsample_bam --proportional -o sub_sampled reads.sorted.bam "${params.subSamplingDepth}"
-        mv sub_sampled*.bam sub_sampled.bam
-        samtools fastq sub_sampled.bam > sub_sampled.reads.fq
-        """
+        if (params.subSamplingDepth != '')
+            """
+            minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o reads.sorted.bam -T reads.tmp -
+            samtools index reads.sorted.bam
+            subsample_bam --proportional -o sub_sampled reads.sorted.bam "${params.subSamplingDepth}"
+            mv sub_sampled*.bam sub_sampled.bam
+            samtools fastq sub_sampled.bam > sub_sampled.reads.fq
+            """
+        else
+            """
+            minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o reads.sorted.bam -T reads.tmp -
+            samtools index reads.sorted.bam
+            mv reads.sorted.bam sub_sampled.bam
+            mv "${reads}" sub_sampled.reads.fq
+            """
 }
 
 /*
