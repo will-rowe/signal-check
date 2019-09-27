@@ -124,7 +124,7 @@ process subsamplingReads {
             """
             minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o reads.sorted.bam -T reads.tmp -
             samtools index reads.sorted.bam
-            subsample_bam --proportional -o sub_sampled reads.sorted.bam "${params.subSamplingDepth}"
+            subsample_bam -t "${task.cpus}" -o sub_sampled reads.sorted.bam "${params.subSamplingDepth}"
             mv sub_sampled*.bam sub_sampled.bam
             samtools fastq sub_sampled.bam > sub_sampled.reads.fq
             """
