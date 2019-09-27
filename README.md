@@ -6,6 +6,25 @@
 
 This is a pipeline and analysis notebook for checking the usefulness of signal-data (for viral metagenomics), helping decide if/where to keep it.
 
+## workflow
+
+* demux reads and trim adapters
+    * qcat
+* assemble
+    * miniasm / redbean
+* subsample reads
+    * pomoxis
+* correct assembly
+    * racon
+* polish assembly
+    * medaka
+    * nanopolish
+    * medaka + nanopolish
+* evaluate assemblies
+    * quast
+    * fastani
+    * nucdiff
+
 ## running the analysis
 
 * create and activate the conda environment for the notebook:
@@ -28,6 +47,17 @@ If you have nextflow and conda installed, or are using the *notebook-analysis* e
 ```
 nextflow run main.nf --reads path/to/<reads> --fast5 full/path/to/<fast5 directory> --output <output directory> --assembler miniasm -profile conda
 ```
+
+## todo
+
+* consolidate into these assembly approaches:
+    * racon + medaka
+    * racon + nanopolish
+    * racon + medaka + nanopolish
+* take single run folder as input
+    * add in demux
+    * add in barcodes to keep
+* output visualisation of MSA / pileup
 
 ## issues
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 resultCheck="results/assembly-unpolished.fasta"
-cmd="nextflow run main.nf --cpus 2 --mem 4GB --reads ./data/ecoli_small.fasta --output results -profile conda --assembler miniasm"
+cmd="nextflow run main.nf --cpus 2 --mem 4GB --reads ./data/ecoli_2kb_region/reads.fasta --output results -profile conda --assembler miniasm"
 echo "Starting nextflow..."
 echo $cmd
 echo "-------------------------------------------------------"
