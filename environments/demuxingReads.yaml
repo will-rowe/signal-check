@@ -1,0 +1,7 @@
+name: demuxingReads
+channels:
+  - bioconda
+  - defaults
+dependencies:
+  - python =3.6
+  - qcat 1.1.0

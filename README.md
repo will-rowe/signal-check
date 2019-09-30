@@ -45,22 +45,20 @@ jupyter notebook analysis.ipynb
 If you have nextflow and conda installed, or are using the *notebook-analysis* environment from above, you just need:
 
 ```
-nextflow run main.nf --reads path/to/<reads> --fast5 full/path/to/<fast5 directory> --output <output directory> --assembler miniasm -profile conda
+nextflow run main.nf --inputDir <full/path/to/directory> --barcodes 09,10,11 --output <output directory> --assembler miniasm -profile conda --cpus 6 --mem 12GB
 ```
 
 ## todo
 
-* consolidate into these assembly approaches:
-    * racon + medaka
-    * racon + nanopolish
-    * racon + medaka + nanopolish
-* take single run folder as input
-    * add in demux
-    * add in barcodes to keep
+* add in help message and full param descript
+* get more info from the qcat process (using the parsing script)
+* get small test dataset
+* add in pre-run checks for reads etc.
 * output visualisation of MSA / pileup
+* add pycoqc
 
 ## issues
 
-* full path is needed to the fast5 directory - nanopolish and nextflow aren't playing nicely at the moment
+* full path is needed to the input directory - nanopolish and nextflow aren't playing nicely at the moment when it comes to collecting the fast5
 * travis does not appear to support the conda environment feature of nextflow, so I've created a single environment for CI testing (environments/travis-testing.yaml) 
 * to update an existing notebook-analysis environment: `conda env update -f environments/notebook-analysis.yaml --prune`

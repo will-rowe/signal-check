@@ -4,8 +4,11 @@ pipelineVersion = '0.1'
 /*
     check some stuff
 */
-if (params.reads == '') {
-    exit 1, "Please specify the read data (use --reads)"
+if (params.inputDir == '') {
+    exit 1, "Please specify the input directory - this is the MinKNOW output dir containing fastq_pass and fast5_pass (use --inputDir)"
+}
+if (params.barcodes.size() == 0) {
+    exit 1, "Please specify the barcodes to use (e.g --barcodes 09,10,11)"
 }
 if (params.assembler == '') {
         exit 1, "Please specify an assembler (use --assembler)'"
@@ -20,15 +23,18 @@ if (params.output == '') {
 /*
     print some stuff
 */
-log.info "========================================="
+log.info "-------------------------------------------------------"
 log.info " pipeline v${pipelineVersion}"
-log.info "========================================="
+log.info "-------------------------------------------------------"
 
 def summary = [:]
-summary['Reads']        = params.reads
-summary['Fast5 dir']        = params.fast5
-if (params.subSamplingDepth != '') {
+summary['Input dir']        = params.inputDir
+summary['Barcodes'] = params.barcodes
+summary['Sequencing kit'] = params.seqKit
+if (params.subSamplingDepth != 0) {
     summary['Sampling depth'] = params.subSamplingDepth
+} else {
+    summary['Sampling depth'] = "na"
 }
 summary['Racon iterat.'] = params.raconRounds
 summary['Medaka model'] = params.medakaModel
@@ -43,172 +49,189 @@ summary['Current path']   = "$PWD"
 summary['Script dir']     = workflow.projectDir
 
 log.info summary.collect { k,v -> "${k.padRight(15)}: $v" }.join("\n")
-log.info "========================================="
+log.info "-------------------------------------------------------"
 
-// Completition message
+// completion message
 workflow.onComplete {
-    log.info "========================================="
+    log.info "-------------------------------------------------------"
     log.info "Pipeline completed at: $workflow.complete"
     log.info "Execution status: ${ workflow.success ? 'OK' : 'failed' }"
     log.info "Execution duration: $workflow.duration"
 }
 
 /*
-    do some trimmingAdapters with porechop
+    do some demuxing and trimming
 */
-process trimmingAdapters {
-    input:
-	   file(reads) from file(params.reads)
-
-    output:
-	   file('reads.trimmed.fastq') into trimmed_reads
-
-	script:
-        """
-    	porechop -i "${reads}" -t "${task.cpus}" -o reads.trimmed.fastq
-        """
-}
-
-// copy the trimmed_read channel so that it can be used by multiple downstream processes
-trimmed_reads.into { trimmed_reads_for_assembly; trimmed_reads_for_polishing; trimmed_reads_for_subsampling  }
-
-/*
-    do an assembly with miniasm or redbean
-*/
-process assemblingReads {
-    publishDir params.output, mode: 'copy', pattern: 'assembly-unpolished.fasta'
+process demuxingReads {
     echo true
 
     input:
-        file reads from trimmed_reads_for_assembly
+       val(inputDir) from params.inputDir
 
     output:
-        file('assembly-unpolished.fasta') into assembly
+	   file('demuxed_reads/barcode-*.fastq') into trimmed_reads_for_assembly
+
+	script:
+        """
+        echo "[info] demuxing reads, trimming and keeping barcodes "${params.barcodes}""
+        cat "${inputDir}"/fastq_pass/*.fastq | qcat --threads "${task.cpus}" --guppy --trim --kit "${params.seqKit}" --min-score "${params.minQualScore}" -b demuxed_reads
+        qcat-parser.py demuxed_reads "${params.barcodes}"
+        """
+}
+
+/*
+    do some assemblies with miniasm or redbean
+*/
+process assemblingReads {
+    publishDir params.output, mode: 'copy', pattern: '*.assembly-unpolished.fasta'
+    echo true
+
+    input:
+        file(reads) from trimmed_reads_for_assembly.flatten()
+
+    output:
+        file('*.assembly-unpolished.fasta') into assembly_for_correction
+        file(reads) into trimmed_reads_for_correction
 
     script:
         if(params.assembler == 'miniasm')
             """
-            echo "[info] using miniasm for assembly"
-            minimap2 -x ava-ont -F 200 -t "${task.cpus}" "${reads}" "${reads}" > "${reads}.paf"
-            miniasm -e2 -n1 -s 500 -R -f "${reads}" "${reads}.paf" > "${reads}.gfa"
-            awk '/^S/{print ">"\$2"\\n"\$3}' "${reads}.gfa" | fold > assembly-unpolished.fasta
+            echo "[info] using miniasm for assembly of "${reads}""
+            minimap2 -x ava-ont -F 200 -t "${task.cpus}" "${reads}" "${reads}" > "${reads.getBaseName()}.paf"
+            miniasm -e2 -n1 -s 500 -R -f "${reads}" "${reads.getBaseName()}.paf" > "${reads.getBaseName()}.gfa"
+            awk '/^S/{print ">"\$2"\\n"\$3}' "${reads.getBaseName()}.gfa" | fold > ${reads.getBaseName()}.assembly-unpolished.fasta
             """
         else if(params.assembler == 'redbean')
             """
             echo "[info] using readbean for assembly (not impl. yet)"
 
-            echo "[info] using miniasm for assembly"
-            minimap2 -x ava-ont -F 200 -t "${task.cpus}" "${reads}" "${reads}" > "${reads}.paf"
-            miniasm -e2 -n1 -s 500 -R -f "${reads}" "${reads}.paf" > "${reads}.gfa"
-            awk '/^S/{print ">"\$2"\\n"\$3}' "${reads}.gfa" | fold > assembly-unpolished.fasta
-            """
-}
-
-// copy the assembly channel so that it can be used by multiple downstream processes
-assembly.into { assembly_for_polishing; assembly_for_signal_based_polishing; assembly_for_read_subsampling }
-
-/*
-    do some subsampling of the reads
-*/
-process subsamplingReads {
-    input:
-        file(assembly) from assembly_for_read_subsampling
-        file(reads) from trimmed_reads_for_subsampling
-
-    output:
-        file('sub_sampled.bam') into subsampled_bam
-        file('sub_sampled.reads.fq') into subsampled_reads
-
-    script:
-        if (params.subSamplingDepth != '')
-            """
-            minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o reads.sorted.bam -T reads.tmp -
-            samtools index reads.sorted.bam
-            subsample_bam -t "${task.cpus}" -o sub_sampled reads.sorted.bam "${params.subSamplingDepth}"
-            mv sub_sampled*.bam sub_sampled.bam
-            samtools fastq sub_sampled.bam > sub_sampled.reads.fq
-            """
-        else
-            """
-            minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o reads.sorted.bam -T reads.tmp -
-            samtools index reads.sorted.bam
-            mv reads.sorted.bam sub_sampled.bam
-            mv "${reads}" sub_sampled.reads.fq
+            echo "[info] using miniasm for assembly of "${reads}""
+            minimap2 -x ava-ont -F 200 -t "${task.cpus}" "${reads}" "${reads}" > "${reads.getBaseName()}.paf"
+            miniasm -e2 -n1 -s 500 -R -f "${reads}" "${reads.getBaseName()}.paf" > "${reads.getBaseName()}.gfa"
+            awk '/^S/{print ">"\$2"\\n"\$3}' "${reads.getBaseName()}.gfa" | fold > ${reads.getBaseName()}.assembly-unpolished.fasta
             """
 }
 
 /*
-    do some polishing without using the signal (X rounds racon, Y round medaka)
+    do some assembly correction with x rounds of racon
 */
-process polishingWithoutSignal {
-	publishDir params.output, mode: 'copy', pattern: 'assembly-polished-without-using-signal.fasta'
-    echo true
+process correctingAssemblyWithRacon {
     input:
-        file(assembly) from assembly_for_polishing
-    	file(reads) from trimmed_reads_for_polishing
+        file(assembly) from assembly_for_correction
+    	file(reads) from trimmed_reads_for_correction
 
     output:
-	   file('assembly-polished-without-using-signal.fasta') into assembly_polished_without_using_signal
+	   file('*.assembly-corrected.fasta') into corrected_assembly
+       file(reads) into trimmed_reads
 
 	script:
         """
-        minimap2 -x map-ont -t "${task.cpus}" "${assembly}" "${reads}" > assembly-racon1.paf
-        racon -t "${task.cpus}" "${reads}" assembly-racon1.paf "${assembly}" > assembly-racon1.fasta
+        minimap2 -x map-ont -t "${task.cpus}" "${assembly}" "${reads}" > ${reads.getBaseName()}-racon1.paf
+        racon -t "${task.cpus}" "${reads}" ${reads.getBaseName()}-racon1.paf "${assembly}" > ${reads.getBaseName()}-racon1.fasta
 
         remainingRounds="\$((${params.raconRounds}-1))"
         for (( i=1; i<=\$remainingRounds; i++ ))
         do
             ii=\$(( \$i + 1 ))
-            minimap2 -x map-ont -t "${task.cpus}" assembly-racon\$i.fasta "${reads}" > assembly-racon\$ii.paf
-            racon -t "${task.cpus}" "${reads}" assembly-racon\$ii.paf assembly-racon\$i.fasta > assembly-racon\$ii.fasta
+            minimap2 -x map-ont -t "${task.cpus}" ${reads.getBaseName()}-racon\$i.fasta "${reads}" > ${reads.getBaseName()}-racon\$ii.paf
+            racon -t "${task.cpus}" "${reads}" ${reads.getBaseName()}-racon\$ii.paf ${reads.getBaseName()}-racon\$i.fasta > ${reads.getBaseName()}-racon\$ii.fasta
+            rm ${reads.getBaseName()}-racon\$i.fasta
         done
 
-        medaka_consensus -i "${reads}" -d assembly-racon4.fasta -o medaka -m "${params.medakaModel}" -t "${task.cpus}"
+        mv ${reads.getBaseName()}-racon*.fasta ${reads.getBaseName()}.assembly-corrected.fasta
+        """
+}
 
-        cp medaka/consensus.fasta assembly-polished-without-using-signal.fasta
+// copy the assembly and reads channel so that we can fork the pipeline
+corrected_assembly.into {assembly_for_subsampling; assembly_for_medaka}
+trimmed_reads.into {reads_for_subsampling; reads_for_medaka}
+
+/*
+    do some polishing with medaka
+*/
+process polishingWithMedaka {
+	publishDir params.output, mode: 'copy', pattern: '*.assembly-corrected.medaka-polished.fasta'
+    echo false
+
+    input:
+        file(assembly) from assembly_for_medaka
+    	file(reads) from reads_for_medaka
+
+    output:
+	   file('*.assembly-corrected.medaka-polished.fasta') into assembly_polished_without_using_signal
+
+	script:
+        """
+        echo "[info] medaka for correction of "${assembly}" using "${reads}""
+        medaka_consensus -i "${reads}" -d "${assembly}" -o medaka -m "${params.medakaModel}" -t "${task.cpus}"
+        cp medaka/consensus.fasta ${reads.getBaseName()}.assembly-corrected.medaka-polished.fasta
         """
 }
 
 /*
-    do some polishing using the signal
+    do some optional subsampling of the reads prior to nanopolish
 */
-process polishingWithSignal {
-    publishDir params.output, mode: 'copy', pattern: 'assembly-polished-using-signal.fasta'
-    if (params.fast5 == '')
-        echo true
+process subsamplingReads {
+    echo true
 
     input:
-        file(assembly) from assembly_for_signal_based_polishing
-        file(reads) from subsampled_reads
-        file(bam) from subsampled_bam
-        val(fast5_dir) from params.fast5
+        file(assembly) from assembly_for_subsampling
+        file(reads) from reads_for_subsampling
 
     output:
-        file('assembly-polished-using-signal.fasta') into assembly_polished_using_signal
+        file(assembly) into assembly_for_nanopolish
+        file('*.sub-sampled.fq') into reads_for_nanopolish
+        file('*.assembly-alignment.bam') into alignment_for_nanopolish
 
     script:
-        if (params.fast5 != '')
+        if (params.subSamplingDepth != 0)
             """
-            nanopolish index -d "${fast5_dir}" "${reads}"
-            samtools index "${bam}"
-            nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b "${bam}" -g "${assembly}" -o polished.vcf
-            nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > assembly-polished-using-signal.fasta;
-
-
-            #nanopolish_makerange.py "${assembly}" | parallel --results nanopolish.results -P "${task.cpus}" nanopolish variants --consensus -t 1 -w {1} -r "${reads}" -b reads.sorted.bam -g "${assembly}" -o polished.{1}.vcf
-            #for i in polished.*.vcf
-            #do;
-            #base=\${i%%.vcf};
-            #nanopolish vcf2fasta --skip-checks -g "${assembly}" \$i > \${base}.fasta;
-            #done;
-            #nanopolish_merge.py polished.*.fasta > assembly-polished-using-signal.fasta
+            echo "[info] subsampling reads for ${reads.getBaseName()}, using "${reads}" and "${assembly}""
+            minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
+            samtools index ${reads.getBaseName()}.assembly-alignment.bam
+            subsample_bam -t "${task.cpus}" -o sub_sampled ${reads.getBaseName()}.assembly-alignment.bam "${params.subSamplingDepth}"
+            mv sub_sampled*.bam ${reads.getBaseName()}.assembly-alignment.bam
+            samtools fastq ${reads.getBaseName()}.assembly-alignment.bam > ${reads.getBaseName()}.sub-sampled.fq
             """
         else
             """
-            echo "[warn] can't do signal-based polishing without signal"
-            echo "[warn] skipping signal-based polishing and touching dummy outfile"
-            touch assembly-polished-using-signal.fasta
+            echo "[info] skipping read sub-sampling for ${reads.getBaseName()}"
+            minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
+            samtools index ${reads.getBaseName()}.assembly-alignment.bam
+            mv "${reads}" ${reads.getBaseName()}.sub-sampled.fq
             """
+}
+
+/*
+    do some polishing with nanopolish
+*/
+process polishingWithNanopolish {
+    publishDir params.output, mode: 'copy', pattern: '*.assembly-corrected.nanopolish-polished.fasta'
+
+    input:
+        file(assembly) from assembly_for_nanopolish
+        file(reads) from reads_for_nanopolish
+        file(bam) from alignment_for_nanopolish
+        val(inputDir) from params.inputDir
+
+    output:
+        file('*.assembly-corrected.nanopolish-polished.fasta') into assembly_polished_using_signal
+
+    script:
+        """
+        nanopolish index -d "${inputDir}" "${reads}"
+        samtools index "${bam}"
+        nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b "${bam}" -g "${assembly}" -o polished.vcf
+        nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > "${reads.getBaseName()}".assembly-corrected.nanopolish-polished.fasta;
+
+        #nanopolish_makerange.py "${assembly}" | parallel --results nanopolish.results -P "${task.cpus}" nanopolish variants --consensus -t 1 -w {1} -r "${reads}" -b "${bam}" -g "${assembly}" -o polished.{1}.vcf
+        #do;
+        #for i in polished.*.vcf
+        #base=\${i%%.vcf};
+        #nanopolish vcf2fasta --skip-checks -g "${assembly}" \$i > \${base}.fasta;
+        #done;
+        #nanopolish_merge.py polished.*.fasta > "${reads.getBaseName()}".assembly-corrected.nanopolish-polished.fasta;
+        """
 }
 
 /*
