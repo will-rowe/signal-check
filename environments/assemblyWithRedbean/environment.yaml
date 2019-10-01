@@ -2,4 +2,4 @@ name: assemblyWithRedbean
 channels:
   - bioconda
 dependencies:
-  - wtdbg =2.3
+  - wtdbg

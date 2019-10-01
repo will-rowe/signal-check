@@ -45,7 +45,7 @@ jupyter notebook analysis.ipynb
 If you have nextflow and conda installed, or are using the *notebook-analysis* environment from above, you just need:
 
 ```
-nextflow run main.nf --inputDir <full/path/to/directory> --barcodes 09,10,11 --output <output directory> --assembler miniasm -profile conda --cpus 6 --mem 12GB
+nextflow run main.nf --inputDir <full/path/to/directory> --barcodes 09,10,11 --output <output directory> -profile conda --cpus 6 --mem 12GB
 ```
 
 ## todo
@@ -62,3 +62,4 @@ nextflow run main.nf --inputDir <full/path/to/directory> --barcodes 09,10,11 --o
 * full path is needed to the input directory - nanopolish and nextflow aren't playing nicely at the moment when it comes to collecting the fast5
 * travis does not appear to support the conda environment feature of nextflow, so I've created a single environment for CI testing (environments/travis-testing.yaml) 
 * to update an existing notebook-analysis environment: `conda env update -f environments/notebook-analysis.yaml --prune`
+* `redbean` is currently only supported for linux platforms - I'll hopefully get around to making a conda recipe for OSX

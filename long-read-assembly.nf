@@ -24,7 +24,7 @@ if (params.output == '') {
     print some stuff
 */
 log.info "-------------------------------------------------------"
-log.info " pipeline v${pipelineVersion}"
+log.info " long read assembly pipeline v${pipelineVersion}"
 log.info "-------------------------------------------------------"
 
 def summary = [:]
@@ -103,12 +103,9 @@ process assemblingReads {
             """
         else if(params.assembler == 'redbean')
             """
-            echo "[info] using readbean for assembly (not impl. yet)"
-
-            echo "[info] using miniasm for assembly of "${reads}""
-            minimap2 -x ava-ont -F 200 -t "${task.cpus}" "${reads}" "${reads}" > "${reads.getBaseName()}.paf"
-            miniasm -e2 -n1 -s 500 -R -f "${reads}" "${reads.getBaseName()}.paf" > "${reads.getBaseName()}.gfa"
-            awk '/^S/{print ">"\$2"\\n"\$3}' "${reads.getBaseName()}.gfa" | fold > ${reads.getBaseName()}.assembly-unpolished.fasta
+            echo "[info] using readbean for assembly of "${reads}""
+            wtdbg2 -x ont -i "${reads}" -t "${task.cpus}" -fo "${reads.getBaseName()}"
+            wtpoa-cns -t "${task.cpus}" -i "${reads.getBaseName()}".ctg.lay.gz -fo "${reads.getBaseName()}".assembly-unpolished.fasta
             """
 }
 
