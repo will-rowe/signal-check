@@ -15,7 +15,7 @@ install:
   - conda config --set always_yes yes --set changeps1 no
   - conda update -q conda
   - conda info -a
-  - conda env create -q -f long-read-assembly-pipeline/environments/travis-testing.yaml
+  - conda env create -q -f pipeline/environments/travis-testing.yaml
   - conda activate travis-testing
 
 script:
