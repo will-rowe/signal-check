@@ -30,7 +30,7 @@ This is a pipeline and analysis notebook for checking the usefulness of signal-d
 * create and activate the conda environment for the notebook:
   
 ```
-conda env create -f environments/notebook-analysis.yaml 
+conda env create -f pipeline/environments/notebook-analysis.yaml 
 conda activate notebook-analysis
 ```
 
@@ -42,17 +42,18 @@ jupyter notebook analysis.ipynb
 
 ## standalone running of the pipeline
 
-If you have nextflow and conda installed, or are using the *notebook-analysis* environment from above, you just need:
+If you have nextflow and conda installed, you just need:
 
 ```
-nextflow run main.nf --inputDir <full/path/to/directory> --barcodes 09,10,11 --output <output directory> -profile conda --cpus 6 --mem 12GB
+nextflow run pipeline/long-read-assembly-pipeline.nf --inputDir <full/path/to/directory> --barcodes 09,10,11 --output <output directory> -profile conda --cpus 6 --mem 12GB
 ```
+
+> to run using Docker instead, swap the `-profile` over to docker
 
 ## todo
 
 * add in help message and full param descript
 * get more info from the qcat process (using the parsing script)
-* get small test dataset
 * add in pre-run checks for reads etc.
 * output visualisation of MSA / pileup
 * add pycoqc

@@ -67,6 +67,7 @@ process demuxingReads {
 
     input:
        val(inputDir) from params.inputDir
+       
 
     output:
 	   file('demuxed_reads/barcode-*.fastq') into trimmed_reads_for_assembly

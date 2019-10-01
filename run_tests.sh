@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-pipelineDir=${PWD}"/long-read-assembly-pipeline"
-inputData=${PWD}"/data/ebov-subset"
+pipelineDir=${PWD}"/pipeline"
+inputData=${pipelineDir}"/data/ebov-subset"
 resultsDir=${pipelineDir}"/test-results"
 resultCheck1=${resultsDir}"/barcode-09.assembly-unpolished.fasta"
 resultCheck2=${resultsDir}"/barcode-09.assembly-corrected.medaka-polished.fasta"
 
 
 testCmd="nextflow run long-read-assembly.nf \
-    -profile conda \
+    -profile docker \
     --cpus 2 \
     --mem 4GB \
     --inputDir ${inputData} \
