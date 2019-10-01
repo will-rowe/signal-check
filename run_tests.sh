@@ -7,7 +7,7 @@ resultCheck2=${resultsDir}"/barcode-09.assembly-corrected.medaka-polished.fasta"
 
 
 testCmd="nextflow run long-read-assembly.nf \
-    -profile docker \
+    -profile conda \
     --cpus 2 \
     --mem 4GB \
     --inputDir ${inputData} \
