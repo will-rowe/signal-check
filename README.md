@@ -63,3 +63,7 @@ nextflow run main.nf --inputDir <full/path/to/directory> --barcodes 09,10,11 --o
 * travis does not appear to support the conda environment feature of nextflow, so I've created a single environment for CI testing (environments/travis-testing.yaml) 
 * to update an existing notebook-analysis environment: `conda env update -f environments/notebook-analysis.yaml --prune`
 * `redbean` is currently only supported for linux platforms - I'll hopefully get around to making a conda recipe for OSX
+
+## pipeline dag
+
+![dag](long-read-assembly-pipeline/flowchart.png)
