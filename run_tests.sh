@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-inputData=${PWD}"/data/ebov-subset"
-resultsDir=${PWD}"/test-results"
+pipelineDir=${PWD}"/pipelines"
+inputData=${pipelineDir}"/data/ebov-subset"
+resultsDir=${pipelineDir}"/test-results"
 resultCheck1=${resultsDir}"/barcode-09.assembly-unpolished.fasta"
 resultCheck2=${resultsDir}"/barcode-09.assembly-corrected.medaka-polished.fasta"
+resultCheck3=${resultsDir}"/barcode-09.assembly-corrected.nanopolish-polished.fasta"
 
+cd ${pipelineDir}
 
 testCmd="nextflow run long-read-assembly.nf \
     -profile docker \
@@ -31,6 +34,12 @@ if test -f "$resultCheck2"; then
     echo "check for medaka polished assembly passed"
 else
     echo "check for medaka polished assembly failed"
+    exit -1
+fi
+if test -f "$resultCheck3"; then
+    echo "check for nanopolish polished assembly passed"
+else
+    echo "check for nanopolish polished assembly failed"
     exit -1
 fi
 
