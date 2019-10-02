@@ -39,7 +39,7 @@ conda activate notebook-analysis
 * open the notebook:
 
 ```
-jupyter notebook analysis.ipynb
+jupyter notebook analysis-r941_min_fast.ipynb
 ```
 
 ## standalone running of the pipeline
