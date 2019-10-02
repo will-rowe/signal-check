@@ -1,4 +1,4 @@
-name: readSubsampling
+name: dockerisedProcess
 channels:
   - bioconda
   - conda-forge

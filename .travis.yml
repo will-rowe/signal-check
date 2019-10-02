@@ -1,22 +1,10 @@
 sudo: required
-
-dist: xenial
-
-language: python
-
-python:
-  - "3.6"
-
+jdk: openjdk8
+services:
+- docker
 install:
-  - wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
-  - bash miniconda.sh -b -p $HOME/miniconda
-  - source "$HOME/miniconda/etc/profile.d/conda.sh"
-  - hash -r
-  - conda config --set always_yes yes --set changeps1 no
-  - conda update -q conda
-  - conda info -a
-  - conda env create -q -f environments/travis-testing.yaml
-  - conda activate travis-testing
-
+- sudo apt-get -qq update
+- curl -fsSL get.nextflow.io | bash
+- mkdir -p ~/bin; cp nextflow ~/bin
 script:
   - sh run_tests.sh

@@ -1,4 +1,4 @@
-name: polishingWithMedaka
+name: dockerisedProcess
 channels:
   - bioconda
   - conda-forge

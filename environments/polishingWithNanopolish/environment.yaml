@@ -1,4 +1,4 @@
-name: polishingWithNanopolish
+name: dockerisedProcess
 channels:
   - bioconda
   - conda-forge

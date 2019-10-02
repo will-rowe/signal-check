@@ -1,4 +1,4 @@
-name: demuxingReads
+name: dockerisedProcess
 channels:
   - bioconda
   - defaults

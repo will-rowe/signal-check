@@ -1,4 +1,4 @@
-name: assemblyWithRedbean
+name: dockerisedProcess
 channels:
   - bioconda
 dependencies:

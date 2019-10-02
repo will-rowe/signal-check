@@ -6,14 +6,13 @@ resultCheck2=${resultsDir}"/barcode-09.assembly-corrected.medaka-polished.fasta"
 
 
 testCmd="nextflow run long-read-assembly.nf \
-    -profile conda \
+    -profile docker \
     --cpus 2 \
     --mem 4GB \
     --inputDir ${inputData} \
     --barcodes 09, \
     --output ${resultsDir} \
-    --subSamplingDepth 1 \
-    -resume"
+    --subSamplingDepth 1"
 
 echo "starting nextflow pipeline..."
 echo $testCmd

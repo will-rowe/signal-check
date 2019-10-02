@@ -1,6 +1,9 @@
-FROM continuumio/miniconda3
-ADD environment.yaml /tmp/environment.yml
-RUN conda env create -f /tmp/environment.yml
+FROM continuumio/miniconda3:latest
+COPY environment.yaml .
 
-# Pull the environment name out of the environment.yml
-ENV PATH /opt/conda/envs/$(head -1 /tmp/environment.yml | cut -d' ' -f2)/bin:$PATH
+RUN conda update -n base -c defaults conda && \
+    conda env create -f environment.yaml && \
+    conda clean -afy
+
+ENV PATH /opt/conda/envs/dockerisedProcess/bin:$PATH
+RUN /bin/bash -c "source activate dockerisedProcess"

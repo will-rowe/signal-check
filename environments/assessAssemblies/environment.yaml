@@ -1,4 +1,4 @@
-name: assessAssemblies
+name: dockerisedProcess
 channels:
   - bioconda
   - conda-forge
