@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-pipelineDir=${PWD}"/pipeline"
-inputData=${pipelineDir}"/data/ebov-subset"
-resultsDir=${pipelineDir}"/test-results"
+inputData=${PWD}"/data/ebov-subset"
+resultsDir=${PWD}"/test-results"
 resultCheck1=${resultsDir}"/barcode-09.assembly-unpolished.fasta"
 resultCheck2=${resultsDir}"/barcode-09.assembly-corrected.medaka-polished.fasta"
 
@@ -16,7 +15,6 @@ testCmd="nextflow run long-read-assembly.nf \
     --subSamplingDepth 1 \
     -resume"
 
-cd ${pipelineDir}
 echo "starting nextflow pipeline..."
 echo $testCmd
 echo "-------------------------------------------------------"

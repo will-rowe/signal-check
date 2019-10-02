@@ -30,7 +30,7 @@ This is a pipeline and analysis notebook for checking the usefulness of signal-d
 * create and activate the conda environment for the notebook:
   
 ```
-conda env create -f pipeline/environments/notebook-analysis.yaml 
+conda env create -f environments/notebook-analysis.yaml 
 conda activate notebook-analysis
 ```
 
@@ -45,7 +45,7 @@ jupyter notebook analysis.ipynb
 If you have nextflow and conda installed, you just need:
 
 ```
-nextflow run pipeline/long-read-assembly-pipeline.nf --inputDir <full/path/to/directory> --barcodes 09,10,11 --output <output directory> -profile conda --cpus 6 --mem 12GB
+nextflow run long-read-assembly-pipeline.nf --inputDir <full/path/to/directory> --barcodes 09,10,11 --output <output directory> -profile conda --cpus 6 --mem 12GB
 ```
 
 > to run using Docker instead, swap the `-profile` over to docker
@@ -67,4 +67,4 @@ nextflow run pipeline/long-read-assembly-pipeline.nf --inputDir <full/path/to/di
 
 ## pipeline dag
 
-![dag](long-read-assembly-pipeline/flowchart.png)
+![dag](flowchart.png)
