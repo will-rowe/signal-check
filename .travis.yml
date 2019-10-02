@@ -4,6 +4,7 @@ services:
 - docker
 install:
 - sudo apt-get -qq update
+- sudo apt-get -qq -y install graphviz
 - curl -fsSL get.nextflow.io | bash
 - mkdir -p ~/bin; cp nextflow ~/bin
 script:

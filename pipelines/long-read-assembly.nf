@@ -213,7 +213,8 @@ process polishingWithNanopolish {
         val(inputDir) from params.inputDir
 
     output:
-        file('*.assembly-corrected.nanopolish-polished.fasta') into assembly_polished_using_signal
+        file('*.assembly-corrected.nanopolish-polished.fasta') into nanopolished_assembly
+        file(reads) into reads_for_repolishing
 
     script:
         """
@@ -232,6 +233,31 @@ process polishingWithNanopolish {
         """
 }
 
+nanopolished_assembly.into {assembly_polished_using_signal; assembly_for_repolishing}
+
+/*
+    do some further polishing of the nanopolished assembly, using medaka
+*/
+process repolishingWithMedaka {
+	publishDir params.output, mode: 'copy', pattern: '*.assembly-corrected.nanopolish-polished.medaka-repolished.fasta'
+    echo false
+
+    input:
+        file(assembly) from assembly_for_repolishing
+    	file(reads) from reads_for_repolishing
+
+    output:
+	   file('*.assembly-corrected.nanopolish-polished.medaka-repolished.fasta') into assembly_polished_using_both
+
+	script:
+        """
+        echo "[info] medaka for correction of "${assembly}" using "${reads}""
+        medaka_consensus -i "${reads}" -d "${assembly}" -o medaka -m "${params.medakaModel}" -t "${task.cpus}"
+        cp medaka/consensus.fasta ${reads.getBaseName()}.assembly-corrected.nanopolish-polished.medaka-repolished.fasta
+        """
+}
+
+
 /*
     do some assessment of assemblies
 */
@@ -241,6 +267,7 @@ process assessAssemblies {
     input:
         file(assembly1) from assembly_polished_without_using_signal
         file(assembly2) from assembly_polished_using_signal
+        file(assembly3) from assembly_polished_using_both
 
     output:
         file('quast_reports.tar') into assembly_assessed
@@ -249,10 +276,12 @@ process assessAssemblies {
         """
         quast.py -o quast_polished_without_signal -t "${task.cpus}" --circos "${assembly1}"
         quast.py -o quast_polished_with_signal -t "${task.cpus}" --circos "${assembly2}"
+        quast.py -o quast_polished_using_both -t "${task.cpus}" --circos "${assembly3}"
 
         mkdir quast_reports
         mv quast_polished_without_signal quast_reports/
         mv quast_polished_with_signal quast_reports/
+        mv quast_polished_using_both quast_reports/
         tar -cvf quast_reports.tar quast_reports
         """
 }

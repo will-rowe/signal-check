@@ -6,6 +6,8 @@
 
 This is a pipeline and analysis notebook for checking the usefulness of signal-data (for viral metagenomics), helping decide if/where to keep it.
 
+The [nextflow pipeline for long read assembly](pipelines/long-read-assembly.nf) will demux the basecalled output from MinKNOW, run assemblies on the specified barcodes, and then run several different polishing strategies.
+
 ## workflow
 
 * demux reads and trim adapters
@@ -61,12 +63,10 @@ nextflow run pipelines/long-read-assembly-pipeline.nf --inputDir <full/path/to/d
 ## issues
 
 * full path is needed to the input directory - nanopolish and nextflow aren't playing nicely at the moment when it comes to collecting the fast5
-* travis does not appear to support the conda environment feature of nextflow, so I've created a single environment for CI testing (environments/travis-testing.yaml) 
-* to update an existing notebook-analysis environment: `conda env update -f pipelines/environments/notebook-analysis.yaml --prune`
 * `redbean` is currently only supported for linux platforms - so use docker if you want to assemble using redbean (I'll hopefully get around to making a conda recipe for OSX)
 
 ## pipeline dag
 
 ### long read assembly pipeline
 
-![dag](flowchart.png)
+![dag](pipelines/flowchart.png)
