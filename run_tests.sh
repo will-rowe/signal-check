@@ -10,7 +10,7 @@ cd ${pipelineDir}
 
 testCmd="nextflow run long-read-assembly.nf \
     -profile docker \
-    --with-dag flowchart.png \
+    -with-dag flowchart.png \
     --cpus 2 \
     --mem 4GB \
     --inputDir ${inputData} \
