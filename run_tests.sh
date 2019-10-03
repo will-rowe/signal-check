@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 pipelineDir=${PWD}"/pipelines"
-inputData=${pipelineDir}"/data/ebov-subset"
+inputData=${pipelineDir}"/data/test-ebov-subset"
 resultsDir=${pipelineDir}"/test-results"
 resultCheck1=${resultsDir}"/barcode-09.assembly-unpolished.fasta"
 resultCheck2=${resultsDir}"/barcode-09.assembly-corrected.medaka-polished.fasta"
@@ -8,7 +8,7 @@ resultCheck3=${resultsDir}"/barcode-09.sub-sampled.assembly-corrected.nanopolish
 
 cd ${pipelineDir}
 
-testCmd="nextflow run long-read-assembly.nf \
+testCmd="nextflow run long-read-assembly-dn.nf \
     -profile docker \
     -with-dag flowchart.png \
     --cpus 2 \
