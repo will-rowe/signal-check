@@ -63,6 +63,7 @@ workflow.onComplete {
     do some demuxing and trimming
 */
 process demuxingReads {
+    publishDir params.output, mode: 'copy', pattern: 'demuxed_reads/barcode-*.fastq'
     echo true
 
     input:
