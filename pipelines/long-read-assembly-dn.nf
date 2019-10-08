@@ -106,7 +106,7 @@ process assemblingReads {
         else if(params.assembler == 'redbean')
             """
             echo "[info] using readbean for assembly of "${reads}""
-            wtdbg2 -x ont -i "${reads}" -t "${task.cpus}" -fo "${reads.getBaseName()}"
+            wtdbg2 -x ont -g 20Kb -i "${reads}" -t "${task.cpus}" -fo "${reads.getBaseName()}"
             wtpoa-cns -t "${task.cpus}" -i "${reads.getBaseName()}".ctg.lay.gz -fo "${reads.getBaseName()}".assembly-unpolished.fasta
             """
 }
@@ -120,7 +120,7 @@ process correctingAssemblyWithRacon {
     	file(reads) from trimmed_reads_for_correction
 
     output:
-	   file('*.assembly-corrected.fasta') into corrected_assembly
+	   file('*.assembly.racon-corrected.fasta') into corrected_assembly
        file(reads) into trimmed_reads
 
 	script:
@@ -137,50 +137,23 @@ process correctingAssemblyWithRacon {
             rm ${reads.getBaseName()}-racon\$i.fasta
         done
 
-        mv ${reads.getBaseName()}-racon*.fasta ${reads.getBaseName()}.assembly-corrected.fasta
+        mv ${reads.getBaseName()}-racon*.fasta ${reads.getBaseName()}.assembly.racon-corrected.fasta
         """
 }
 
-// copy the assembly and reads channel so that we can fork the pipeline
-corrected_assembly.into {assembly_for_subsampling; assembly_for_medaka}
-trimmed_reads.into {reads_for_subsampling; reads_for_medaka}
 
 /*
-    do some polishing with medaka
-*/
-process polishingWithMedaka {
-	publishDir params.output, mode: 'copy', pattern: '*.assembly-corrected.medaka-polished.fasta'
-    echo false
-
-    input:
-        file(assembly) from assembly_for_medaka
-    	file(reads) from reads_for_medaka
-
-    output:
-	   file('*.assembly-corrected.medaka-polished.fasta') into assembly_polished_without_using_signal
-
-	script:
-        """
-        echo "[info] medaka for correction of "${assembly}" using "${reads}""
-        medaka_consensus -i "${reads}" -d "${assembly}" -o medaka -m "${params.medakaModel}" -t "${task.cpus}"
-        cp medaka/consensus.fasta ${reads.getBaseName()}.assembly-corrected.medaka-polished.fasta
-        """
-}
-
-/*
-    do some optional subsampling of the reads prior to nanopolish
+    do some read subsampling if requested
 */
 process subsamplingReads {
-    echo true
-
     input:
-        file(assembly) from assembly_for_subsampling
-        file(reads) from reads_for_subsampling
+    	file(assembly) from corrected_assembly
+        file(reads) from trimmed_reads
 
     output:
-        file(assembly) into assembly_for_nanopolish
-        file('*.sub-sampled.fq') into reads_for_nanopolish
-        file('*.assembly-alignment.bam') into alignment_for_nanopolish
+        file(assembly) into subsampled_assembly
+        file(reads) into subsampled_reads_original
+        file('*.sub-sampled.fq') into subsampled_reads
 
     script:
         if (params.subSamplingDepth != 0)
@@ -195,11 +168,72 @@ process subsamplingReads {
         else
             """
             echo "[info] skipping read sub-sampling for ${reads.getBaseName()}"
-            minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
-            samtools index ${reads.getBaseName()}.assembly-alignment.bam
             mv "${reads}" ${reads.getBaseName()}.sub-sampled.fq
             """
 }
+
+
+// copy the assembly and reads channel so that we can fork the pipeline
+subsampled_assembly.into {assembly_for_medaka_f1; assembly_for_nanopolish_f2}
+subsampled_reads_original.into {reads_for_medaka_f1; reads_for_medaka_f2}
+subsampled_reads.into {reads_for_nanopolish_f1; reads_for_nanopolish_f2}
+
+/*
+    FORK 1:
+*/
+
+/*
+    do some polishing with medaka
+*/
+process polishingWithMedaka {
+	publishDir params.output, mode: 'copy', pattern: '*.assembly-corrected.medaka-polished.fasta'
+
+    input:
+        file(assembly) from assembly_for_medaka_f1
+    	file(reads) from reads_for_medaka_f1
+        file(subsampledReads) from reads_for_nanopolish_f1
+
+    output:
+	   file('*.assembly-corrected.medaka-polished.fasta') into medaka_polished_assembly
+       file(subsampledReads) into medaka_reads_for_repolishing
+
+	script:
+        """
+        medaka_consensus -i "${reads}" -d "${assembly}" -o medaka -m "${params.medakaModel}" -t "${task.cpus}"
+        awk '/^>/{print "> contig" ++i; next}{print}' < medaka/consensus.fasta > ${reads.getBaseName()}.assembly-corrected.medaka-polished.fasta
+        """
+}
+
+medaka_polished_assembly.into {assembly_polished_without_using_signal; medaka_polished_assembly_for_repolishing}
+
+/*
+    do some further polishing of the medaka polished assembly, using nanopolish
+*/
+process repolishingWithNanopolish {
+	publishDir params.output, mode: 'copy', pattern: '*.assembly-corrected.medaka-polished.nanopolish-repolished.fasta'
+
+    input:
+        file(assembly) from medaka_polished_assembly_for_repolishing
+    	file(reads) from medaka_reads_for_repolishing
+        val(inputDir) from params.inputDir
+
+    output:
+	   file('*.assembly-corrected.medaka-polished.nanopolish-repolished.fasta') into assembly_medaka_then_nanopolish
+
+    script:
+        """
+        minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
+        samtools index ${reads.getBaseName()}.assembly-alignment.bam
+
+        nanopolish index -d "${inputDir}" "${reads}"
+        nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b ${reads.getBaseName()}.assembly-alignment.bam -g "${assembly}" -o polished.vcf
+        nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > "${reads.getBaseName()}".assembly-corrected.medaka-polished.nanopolish-repolished.fasta;
+        """
+}
+
+/*
+    FORK 2:
+*/
 
 /*
     do some polishing with nanopolish
@@ -208,56 +242,51 @@ process polishingWithNanopolish {
     publishDir params.output, mode: 'copy', pattern: '*.assembly-corrected.nanopolish-polished.fasta'
 
     input:
-        file(assembly) from assembly_for_nanopolish
-        file(reads) from reads_for_nanopolish
-        file(bam) from alignment_for_nanopolish
+        file(assembly) from assembly_for_nanopolish_f2
+        file(reads) from reads_for_nanopolish_f2
+        file(origReads) from reads_for_medaka_f2
         val(inputDir) from params.inputDir
 
     output:
         file('*.assembly-corrected.nanopolish-polished.fasta') into nanopolished_assembly
-        file(reads) into reads_for_repolishing
+        file(origReads) into reads_for_repolishing
 
     script:
         """
-        nanopolish index -d "${inputDir}" "${reads}"
-        samtools index "${bam}"
-        nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b "${bam}" -g "${assembly}" -o polished.vcf
-        nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > "${reads.getBaseName()}".assembly-corrected.nanopolish-polished.fasta;
+        minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
+        samtools index ${reads.getBaseName()}.assembly-alignment.bam
 
-        #nanopolish_makerange.py "${assembly}" | parallel --results nanopolish.results -P "${task.cpus}" nanopolish variants --consensus -t 1 -w {1} -r "${reads}" -b "${bam}" -g "${assembly}" -o polished.{1}.vcf
-        #do;
-        #for i in polished.*.vcf
-        #base=\${i%%.vcf};
-        #nanopolish vcf2fasta --skip-checks -g "${assembly}" \$i > \${base}.fasta;
-        #done;
-        #nanopolish_merge.py polished.*.fasta > "${reads.getBaseName()}".assembly-corrected.nanopolish-polished.fasta;
+        nanopolish index -d "${inputDir}" "${reads}"
+        nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b "${reads.getBaseName()}.assembly-alignment.bam" -g "${assembly}" -o polished.vcf
+        nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > "${reads.getBaseName()}".assembly-corrected.nanopolish-polished.fasta;
         """
 }
 
-nanopolished_assembly.into {assembly_polished_using_signal; assembly_for_repolishing}
+nanopolished_assembly.into {assembly_polished_using_signal; nanopolished_assembly_for_repolishing}
 
 /*
-    do some further polishing of the nanopolished assembly, using medaka
+    do some further polishing of the nanopolished assembly, using medaka and the original reads
 */
 process repolishingWithMedaka {
 	publishDir params.output, mode: 'copy', pattern: '*.assembly-corrected.nanopolish-polished.medaka-repolished.fasta'
-    echo false
 
     input:
-        file(assembly) from assembly_for_repolishing
+        file(assembly) from nanopolished_assembly_for_repolishing
     	file(reads) from reads_for_repolishing
 
     output:
-	   file('*.assembly-corrected.nanopolish-polished.medaka-repolished.fasta') into assembly_polished_using_both
+	   file('*.assembly-corrected.nanopolish-polished.medaka-repolished.fasta') into assembly_nanopolish_then_medaka
 
 	script:
         """
-        echo "[info] medaka for correction of "${assembly}" using "${reads}""
         medaka_consensus -i "${reads}" -d "${assembly}" -o medaka -m "${params.medakaModel}" -t "${task.cpus}"
-        cp medaka/consensus.fasta ${reads.getBaseName()}.assembly-corrected.nanopolish-polished.medaka-repolished.fasta
+        awk '/^>/{print "> contig" ++i; next}{print}' < medaka/consensus.fasta > ${reads.getBaseName()}.assembly-corrected.nanopolish-polished.medaka-repolished.fasta
         """
 }
 
+/*
+    REJOIN FORKS:
+*/
 
 /*
     do some assessment of assemblies
@@ -268,21 +297,24 @@ process assessAssemblies {
     input:
         file(assembly1) from assembly_polished_without_using_signal
         file(assembly2) from assembly_polished_using_signal
-        file(assembly3) from assembly_polished_using_both
+        file(assembly3) from assembly_nanopolish_then_medaka
+        file(assembly4) from assembly_medaka_then_nanopolish
 
     output:
         file('quast_reports.tar') into assembly_assessed
 
     script:
         """
-        quast.py -o quast_polished_without_signal -t "${task.cpus}" --circos "${assembly1}"
-        quast.py -o quast_polished_with_signal -t "${task.cpus}" --circos "${assembly2}"
-        quast.py -o quast_polished_using_both -t "${task.cpus}" --circos "${assembly3}"
+        quast.py -o quast_polished_with_medaka -t "${task.cpus}" --circos "${assembly1}"
+        quast.py -o quast_polished_with_nanopolish -t "${task.cpus}" --circos "${assembly2}"
+        quast.py -o quast_nanopolish_then_medaka -t "${task.cpus}" --circos "${assembly3}"
+        quast.py -o quast_medaka_then_nanopolish -t "${task.cpus}" --circos "${assembly4}"
 
         mkdir quast_reports
-        mv quast_polished_without_signal quast_reports/
-        mv quast_polished_with_signal quast_reports/
-        mv quast_polished_using_both quast_reports/
+        mv quast_polished_with_medaka quast_reports/
+        mv quast_polished_with_nanopolish quast_reports/
+        mv quast_nanopolish_then_medaka quast_reports/
+        mv quast_medaka_then_nanopolish quast_reports/
         tar -cvf quast_reports.tar quast_reports
         """
 }

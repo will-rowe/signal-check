@@ -27,7 +27,8 @@ The basic steps of the pipelines are:
 * polish, either:
   * without signal
   * with signal
-  * with both
+  * with signal first, then without
+  * without signal first, then with
 * basic assessment of the assemblies
 
 There are a few choices of software for each step (e.g. miniasm or redbean for de-novo assembly)
@@ -86,3 +87,8 @@ nextflow run pipelines/long-read-assembly-pipeline-dn.nf --inputDir <full/path/t
 * add in pre-run checks for reads etc.
 * output visualisation of MSA / pileup
 * add pycoqc
+* Redbean assemblies aren't great, I need to try parameterising this better
+
+## Notes
+
+* medaka renames the contigs to include range data, which then breaks Nanopolish - so contigs are renamed sequentially after medaka

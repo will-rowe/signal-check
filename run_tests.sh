@@ -16,7 +16,8 @@ testCmd="nextflow run long-read-assembly-dn.nf \
     --inputDir ${inputData} \
     --barcodes 09, \
     --output ${resultsDir} \
-    --subSamplingDepth 1"
+    --subSamplingDepth 1 \
+    -resume"
 
 echo "starting nextflow pipeline..."
 echo $testCmd
@@ -46,5 +47,5 @@ fi
 
 echo "cleaning up..."
 rm -rf work
-rm -rf .nextflow.lo*
 rm -rf ${resultsDir}
+rm -rf .nextflo*
