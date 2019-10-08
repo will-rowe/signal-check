@@ -4,8 +4,11 @@ pipelineVersion = '0.1'
 /*
     check some stuff
 */
-if (params.inputDir == '') {
-    exit 1, "Please specify the input directory - this is the MinKNOW output dir containing fastq_pass and fast5_pass (use --inputDir)"
+if (params.fastqDir == '') {
+    exit 1, "Please specify the directory containing the fastq data - this is usually the fastq_pass directory in the MinKNOW output (use --fastqDir)"
+}
+if (params.fast5Dir == '') {
+    exit 1, "Please specify the directory containing the fast5 data - this is usually the fast5_pass directory in the MinKNOW output (use --fast5Dir)"
 }
 if (params.barcodes.size() == 0) {
     exit 1, "Please specify the barcodes to use (e.g --barcodes 09,10,11)"
@@ -28,7 +31,8 @@ log.info " de novo long read assembly pipeline v${pipelineVersion}"
 log.info "-------------------------------------------------------"
 
 def summary = [:]
-summary['Input dir']        = params.inputDir
+summary['fastq dir']        = params.fastqDir
+summary['fast5 dir']        = params.fast5Dir
 summary['Barcodes'] = params.barcodes
 summary['Sequencing kit'] = params.seqKit
 if (params.subSamplingDepth != 0) {
@@ -64,10 +68,10 @@ workflow.onComplete {
 */
 process demuxingReads {
     publishDir params.output, mode: 'copy', pattern: 'demuxed_reads/barcode-*.fastq'
-    echo true
+    echo false
 
     input:
-       val(inputDir) from params.inputDir
+       val(fastqDir) from params.fastqDir
        
 
     output:
@@ -76,7 +80,7 @@ process demuxingReads {
 	script:
         """
         echo "[info] demuxing reads, trimming and keeping barcodes "${params.barcodes}""
-        cat "${inputDir}"/fastq_pass/*.fastq | qcat --threads "${task.cpus}" --guppy --trim --kit "${params.seqKit}" --min-score "${params.minQualScore}" -b demuxed_reads
+        cat "${fastqDir}"/*.fastq | qcat --threads "${task.cpus}" --guppy --trim --kit "${params.seqKit}" --min-score "${params.minQualScore}" -b demuxed_reads
         qcat-parser.py demuxed_reads "${params.barcodes}"
         """
 }
@@ -86,7 +90,7 @@ process demuxingReads {
 */
 process assemblingReads {
     publishDir params.output, mode: 'copy', pattern: '*.assembly-unpolished.fasta'
-    echo true
+    echo false
 
     input:
         file(reads) from trimmed_reads_for_assembly.flatten()
@@ -146,6 +150,8 @@ process correctingAssemblyWithRacon {
     do some read subsampling if requested
 */
 process subsamplingReads {
+    echo false
+    
     input:
     	file(assembly) from corrected_assembly
         file(reads) from trimmed_reads
@@ -215,7 +221,7 @@ process repolishingWithNanopolish {
     input:
         file(assembly) from medaka_polished_assembly_for_repolishing
     	file(reads) from medaka_reads_for_repolishing
-        val(inputDir) from params.inputDir
+        val(fast5Dir) from params.fast5Dir
 
     output:
 	   file('*.assembly-corrected.medaka-polished.nanopolish-repolished.fasta') into assembly_medaka_then_nanopolish
@@ -225,7 +231,7 @@ process repolishingWithNanopolish {
         minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
         samtools index ${reads.getBaseName()}.assembly-alignment.bam
 
-        nanopolish index -d "${inputDir}" "${reads}"
+        nanopolish index -d "${fast5Dir}" "${reads}"
         nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b ${reads.getBaseName()}.assembly-alignment.bam -g "${assembly}" -o polished.vcf
         nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > "${reads.getBaseName()}".assembly-corrected.medaka-polished.nanopolish-repolished.fasta;
         """
@@ -245,7 +251,7 @@ process polishingWithNanopolish {
         file(assembly) from assembly_for_nanopolish_f2
         file(reads) from reads_for_nanopolish_f2
         file(origReads) from reads_for_medaka_f2
-        val(inputDir) from params.inputDir
+        val(fast5Dir) from params.fast5Dir
 
     output:
         file('*.assembly-corrected.nanopolish-polished.fasta') into nanopolished_assembly
@@ -256,7 +262,7 @@ process polishingWithNanopolish {
         minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
         samtools index ${reads.getBaseName()}.assembly-alignment.bam
 
-        nanopolish index -d "${inputDir}" "${reads}"
+        nanopolish index -d "${fast5Dir}" "${reads}"
         nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b "${reads.getBaseName()}.assembly-alignment.bam" -g "${assembly}" -o polished.vcf
         nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > "${reads.getBaseName()}".assembly-corrected.nanopolish-polished.fasta;
         """

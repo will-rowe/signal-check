@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 pipelineDir=${PWD}"/pipelines"
-inputData=${pipelineDir}"/data/test-ebov-subset"
+fastqDir=${pipelineDir}"/data/test-ebov-subset/fastq_pass"
+fast5Dir=${pipelineDir}"/data/test-ebov-subset/fast5_pass"
 resultsDir=${pipelineDir}"/test-results"
 resultCheck1=${resultsDir}"/barcode-09.assembly-unpolished.fasta"
 resultCheck2=${resultsDir}"/barcode-09.assembly-corrected.medaka-polished.fasta"
@@ -13,7 +14,8 @@ testCmd="nextflow run long-read-assembly-dn.nf \
     -with-dag flowchart.png \
     --cpus 2 \
     --mem 4GB \
-    --inputDir ${inputData} \
+    --fastqDir ${fastqDir} \
+    --fast5Dir ${fast5Dir} \
     --barcodes 09, \
     --output ${resultsDir} \
     --subSamplingDepth 1 \

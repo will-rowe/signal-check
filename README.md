@@ -69,7 +69,7 @@ jupyter notebook analysis-r941_min_fast.ipynb
 If you have nextflow and conda installed, you just need:
 
 ```
-nextflow run pipelines/long-read-assembly-pipeline-dn.nf --inputDir <full/path/to/directory> --barcodes 09,10,11 --output <output directory> -profile conda --cpus 6 --mem 12GB
+nextflow run pipelines/long-read-assembly-pipeline-dn.nf --fastqDir </path/to/fastq_pass> --fast5Dir <path/to/fast5_pass> --barcodes 09,10,11 --output <output directory> -profile conda --cpus 6 --mem 12GB
 ```
 
 > to run using Docker instead, swap the `-profile` over to docker
