@@ -206,7 +206,7 @@ process polishingWithMedaka {
 	script:
         """
         medaka_consensus -i "${reads}" -d "${assembly}" -o medaka -m "${params.medakaModel}" -t "${task.cpus}"
-        awk '/^>/{print "> contig" ++i; next}{print}' < medaka/consensus.fasta > ${reads.getBaseName()}.assembly-corrected.medaka-polished.fasta
+        awk '/^>/{print ">contig" ++i; next}{print}' < medaka/consensus.fasta > ${reads.getBaseName()}.assembly-corrected.medaka-polished.fasta
         """
 }
 
@@ -286,7 +286,7 @@ process repolishingWithMedaka {
 	script:
         """
         medaka_consensus -i "${reads}" -d "${assembly}" -o medaka -m "${params.medakaModel}" -t "${task.cpus}"
-        awk '/^>/{print "> contig" ++i; next}{print}' < medaka/consensus.fasta > ${reads.getBaseName()}.assembly-corrected.nanopolish-polished.medaka-repolished.fasta
+        awk '/^>/{print ">contig" ++i; next}{print}' < medaka/consensus.fasta > ${reads.getBaseName()}.assembly-corrected.nanopolish-polished.medaka-repolished.fasta
         """
 }
 
