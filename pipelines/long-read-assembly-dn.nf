@@ -105,13 +105,15 @@ process assemblingReads {
             echo "[info] using miniasm for assembly of "${reads}""
             minimap2 -x ava-ont -F 200 -t "${task.cpus}" "${reads}" "${reads}" > "${reads.getBaseName()}.paf"
             miniasm -e2 -n1 -s 500 -R -f "${reads}" "${reads.getBaseName()}.paf" > "${reads.getBaseName()}.gfa"
-            awk '/^S/{print ">"\$2"\\n"\$3}' "${reads.getBaseName()}.gfa" | fold > ${reads.getBaseName()}.assembly-unpolished.fasta
+            awk '/^S/{print ">"\$2"\\n"\$3}' "${reads.getBaseName()}.gfa" | fold > assembly.fasta
+            awk '/^>/{print ">unpolished.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".assembly-unpolished.fasta
             """
         else if(params.assembler == 'redbean')
             """
             echo "[info] using readbean for assembly of "${reads}""
             wtdbg2 -x ont -g 20Kb -i "${reads}" -t "${task.cpus}" -fo "${reads.getBaseName()}"
-            wtpoa-cns -t "${task.cpus}" -i "${reads.getBaseName()}".ctg.lay.gz -fo "${reads.getBaseName()}".assembly-unpolished.fasta
+            wtpoa-cns -t "${task.cpus}" -i "${reads.getBaseName()}".ctg.lay.gz -fo assembly.fasta
+            awk '/^>/{print ">unpolished.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".assembly-unpolished.fasta
             """
 }
 
@@ -182,7 +184,27 @@ process subsamplingReads {
 // copy the assembly and reads channel so that we can fork the pipeline
 subsampled_assembly.into {assembly_for_medaka_f1; assembly_for_nanopolish_f2}
 subsampled_reads_original.into {reads_for_medaka_f1; reads_for_medaka_f2}
-subsampled_reads.into {reads_for_nanopolish_f1; reads_for_nanopolish_f2}
+subsampled_reads.into {reads_for_nanopolish_indexing; reads_for_nanopolish_f1; reads_for_nanopolish_f2}
+
+/*
+    run nanopolish index in it's own process so we don't need to run it multiple times
+*/
+process nanopolishIndexing {
+    input:
+        file(reads) from reads_for_nanopolish_indexing
+        val(fast5Dir) from params.fast5Dir
+
+    output:
+        set file ('*.index'), file('*.fai'), file('*.gzi'), file('*.readdb') into nanopolish_index_files
+
+    script:
+        """
+        nanopolish index -d "${fast5Dir}" "${reads}"
+        """
+}
+
+// copy the nanopolish index files for each fork
+nanopolish_index_files.into {nanopolish_index_files_f1; nanopolish_index_files_f2}
 
 /*
     FORK 1:
@@ -201,12 +223,12 @@ process polishingWithMedaka {
 
     output:
 	   file('*.assembly-corrected.medaka-polished.fasta') into medaka_polished_assembly
-       file(subsampledReads) into medaka_reads_for_repolishing
+       file(subsampledReads) into reads_for_repolishing_with_nanopolish
 
 	script:
         """
         medaka_consensus -i "${reads}" -d "${assembly}" -o medaka -m "${params.medakaModel}" -t "${task.cpus}"
-        awk '/^>/{print ">contig" ++i; next}{print}' < medaka/consensus.fasta > ${reads.getBaseName()}.assembly-corrected.medaka-polished.fasta
+        awk '/^>/{print ">medaka.contig" ++i; next}{print}' < medaka/consensus.fasta > ${reads.getBaseName()}.assembly-corrected.medaka-polished.fasta
         """
 }
 
@@ -217,11 +239,10 @@ medaka_polished_assembly.into {assembly_polished_without_using_signal; medaka_po
 */
 process repolishingWithNanopolish {
 	publishDir params.output, mode: 'copy', pattern: '*.assembly-corrected.medaka-polished.nanopolish-repolished.fasta'
-
     input:
         file(assembly) from medaka_polished_assembly_for_repolishing
-    	file(reads) from medaka_reads_for_repolishing
-        val(fast5Dir) from params.fast5Dir
+    	file(reads) from reads_for_repolishing_with_nanopolish
+        set file(index), file(fai), file(gzi), file(readdb) from nanopolish_index_files_f1
 
     output:
 	   file('*.assembly-corrected.medaka-polished.nanopolish-repolished.fasta') into assembly_medaka_then_nanopolish
@@ -231,9 +252,9 @@ process repolishingWithNanopolish {
         minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
         samtools index ${reads.getBaseName()}.assembly-alignment.bam
 
-        nanopolish index -d "${fast5Dir}" "${reads}"
         nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b ${reads.getBaseName()}.assembly-alignment.bam -g "${assembly}" -o polished.vcf
-        nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > "${reads.getBaseName()}".assembly-corrected.medaka-polished.nanopolish-repolished.fasta;
+        nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > assembly.fasta;
+        awk '/^>/{print ">medaka.nanopolish.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".assembly-corrected.medaka-polished.nanopolish-repolished.fasta
         """
 }
 
@@ -251,7 +272,7 @@ process polishingWithNanopolish {
         file(assembly) from assembly_for_nanopolish_f2
         file(reads) from reads_for_nanopolish_f2
         file(origReads) from reads_for_medaka_f2
-        val(fast5Dir) from params.fast5Dir
+        set file(index), file(fai), file(gzi), file(readdb) from nanopolish_index_files_f2
 
     output:
         file('*.assembly-corrected.nanopolish-polished.fasta') into nanopolished_assembly
@@ -262,9 +283,9 @@ process polishingWithNanopolish {
         minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
         samtools index ${reads.getBaseName()}.assembly-alignment.bam
 
-        nanopolish index -d "${fast5Dir}" "${reads}"
         nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b "${reads.getBaseName()}.assembly-alignment.bam" -g "${assembly}" -o polished.vcf
-        nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > "${reads.getBaseName()}".assembly-corrected.nanopolish-polished.fasta;
+        nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > assembly.fasta;
+        awk '/^>/{print ">nanopolish.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".assembly-corrected.nanopolish-polished.fasta
         """
 }
 
@@ -286,7 +307,7 @@ process repolishingWithMedaka {
 	script:
         """
         medaka_consensus -i "${reads}" -d "${assembly}" -o medaka -m "${params.medakaModel}" -t "${task.cpus}"
-        awk '/^>/{print ">contig" ++i; next}{print}' < medaka/consensus.fasta > ${reads.getBaseName()}.assembly-corrected.nanopolish-polished.medaka-repolished.fasta
+        awk '/^>/{print ">nanopolish.medaka.contig" ++i; next}{print}' < medaka/consensus.fasta > ${reads.getBaseName()}.assembly-corrected.nanopolish-polished.medaka-repolished.fasta
         """
 }
 

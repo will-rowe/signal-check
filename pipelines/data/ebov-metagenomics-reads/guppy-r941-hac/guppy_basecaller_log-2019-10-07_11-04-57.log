@@ -1,0 +1,15 @@
+2019-10-07 11:04:57.595376 [guppy/message] ONT Guppy basecalling software version 3.2.2+9fe0a78
+config file:        /opt/ONT/MinKNOW/conf/guppy_configs/dna_r9.4.1_450bps_hac.cfg
+model file:         /usr/local/ont-guppy/data/template_r9.4.1_450bps_hac.jsn
+input path:         fast5_pass/
+save path:          GUPPPY_HAC/
+chunk size:         1000
+chunks per runner:  1000
+records per file:   4000
+num basecallers:    4
+gpu device:         cuda:all:100%
+kernel path:        
+runners per device: 2
+
+2019-10-07 11:04:59.301594 [guppy/error] CUDA error at /builds/ofan/ont_core_cpp/ont_core/basecall_core/nn_caller_cuda.cpp:770: CUDA_ERROR_OUT_OF_MEMORY
+2019-10-07 11:04:59.301646 [guppy/warning] An error occurred in the basecaller. Aborting.

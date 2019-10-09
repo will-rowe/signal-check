@@ -82,6 +82,7 @@ nextflow run pipelines/long-read-assembly-pipeline-dn.nf --fastqDir </path/to/fa
 
 ## Todo
 
+* put nanopolish index command in a separate process so that it is only called once
 * add in help message and full param descript
 * get more info from the qcat process (using the parsing script)
 * add in pre-run checks for reads etc.
