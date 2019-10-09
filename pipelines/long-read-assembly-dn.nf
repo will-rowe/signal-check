@@ -89,14 +89,14 @@ process demuxingReads {
     do some assemblies with miniasm or redbean
 */
 process assemblingReads {
-    publishDir params.output, mode: 'copy', pattern: '*.assembly-unpolished.fasta'
+    publishDir params.output, mode: 'copy', pattern: '*.assembly.raw.fasta'
     echo false
 
     input:
         file(reads) from trimmed_reads_for_assembly.flatten()
 
     output:
-        file('*.assembly-unpolished.fasta') into assembly_for_correction
+        file('*.assembly.raw.fasta') into assembly_for_correction
         file(reads) into trimmed_reads_for_correction
 
     script:
@@ -106,14 +106,14 @@ process assemblingReads {
             minimap2 -x ava-ont -F 200 -t "${task.cpus}" "${reads}" "${reads}" > "${reads.getBaseName()}.paf"
             miniasm -e2 -n1 -s 500 -R -f "${reads}" "${reads.getBaseName()}.paf" > "${reads.getBaseName()}.gfa"
             awk '/^S/{print ">"\$2"\\n"\$3}' "${reads.getBaseName()}.gfa" | fold > assembly.fasta
-            awk '/^>/{print ">unpolished.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".assembly-unpolished.fasta
+            awk '/^>/{print ">assembly.raw.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".assembly.raw.fasta
             """
         else if(params.assembler == 'redbean')
             """
             echo "[info] using readbean for assembly of "${reads}""
             wtdbg2 -x ont -g 20Kb -i "${reads}" -t "${task.cpus}" -fo "${reads.getBaseName()}"
             wtpoa-cns -t "${task.cpus}" -i "${reads.getBaseName()}".ctg.lay.gz -fo assembly.fasta
-            awk '/^>/{print ">unpolished.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".assembly-unpolished.fasta
+            awk '/^>/{print ">assembly.raw.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".assembly.raw.fasta
             """
 }
 
@@ -126,7 +126,7 @@ process correctingAssemblyWithRacon {
     	file(reads) from trimmed_reads_for_correction
 
     output:
-	   file('*.assembly.racon-corrected.fasta') into corrected_assembly
+	   file('*.assembly.racon.fasta') into corrected_assembly
        file(reads) into trimmed_reads
 
 	script:
@@ -143,7 +143,7 @@ process correctingAssemblyWithRacon {
             rm ${reads.getBaseName()}-racon\$i.fasta
         done
 
-        mv ${reads.getBaseName()}-racon*.fasta ${reads.getBaseName()}.assembly.racon-corrected.fasta
+        mv ${reads.getBaseName()}-racon*.fasta ${reads.getBaseName()}.assembly.racon.fasta
         """
 }
 
@@ -214,7 +214,7 @@ nanopolish_index_files.into {nanopolish_index_files_f1; nanopolish_index_files_f
     do some polishing with medaka
 */
 process polishingWithMedaka {
-	publishDir params.output, mode: 'copy', pattern: '*.assembly-corrected.medaka-polished.fasta'
+	publishDir params.output, mode: 'copy', pattern: '*.assembly.racon.medaka.fasta'
 
     input:
         file(assembly) from assembly_for_medaka_f1
@@ -222,13 +222,13 @@ process polishingWithMedaka {
         file(subsampledReads) from reads_for_nanopolish_f1
 
     output:
-	   file('*.assembly-corrected.medaka-polished.fasta') into medaka_polished_assembly
+	   file('*.assembly.racon.medaka.fasta') into medaka_polished_assembly
        file(subsampledReads) into reads_for_repolishing_with_nanopolish
 
 	script:
         """
         medaka_consensus -i "${reads}" -d "${assembly}" -o medaka -m "${params.medakaModel}" -t "${task.cpus}"
-        awk '/^>/{print ">medaka.contig" ++i; next}{print}' < medaka/consensus.fasta > ${reads.getBaseName()}.assembly-corrected.medaka-polished.fasta
+        awk '/^>/{print ">medaka.contig" ++i; next}{print}' < medaka/consensus.fasta > ${assembly.getSimpleName()}.assembly.racon.medaka.fasta
         """
 }
 
@@ -238,14 +238,14 @@ medaka_polished_assembly.into {assembly_polished_without_using_signal; medaka_po
     do some further polishing of the medaka polished assembly, using nanopolish
 */
 process repolishingWithNanopolish {
-	publishDir params.output, mode: 'copy', pattern: '*.assembly-corrected.medaka-polished.nanopolish-repolished.fasta'
+	publishDir params.output, mode: 'copy', pattern: '*.assembly.racon.medaka.nanopolish.fasta'
     input:
         file(assembly) from medaka_polished_assembly_for_repolishing
     	file(reads) from reads_for_repolishing_with_nanopolish
         set file(index), file(fai), file(gzi), file(readdb) from nanopolish_index_files_f1
 
     output:
-	   file('*.assembly-corrected.medaka-polished.nanopolish-repolished.fasta') into assembly_medaka_then_nanopolish
+	   file('*.assembly.racon.medaka.nanopolish.fasta') into assembly_medaka_then_nanopolish
 
     script:
         """
@@ -254,7 +254,7 @@ process repolishingWithNanopolish {
 
         nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b ${reads.getBaseName()}.assembly-alignment.bam -g "${assembly}" -o polished.vcf
         nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > assembly.fasta;
-        awk '/^>/{print ">medaka.nanopolish.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".assembly-corrected.medaka-polished.nanopolish-repolished.fasta
+        awk '/^>/{print ">medaka.nanopolish.contig" ++i; next}{print}' < assembly.fasta > "${assembly.getSimpleName()}".assembly.racon.medaka.nanopolish.fasta
         """
 }
 
@@ -266,7 +266,7 @@ process repolishingWithNanopolish {
     do some polishing with nanopolish
 */
 process polishingWithNanopolish {
-    publishDir params.output, mode: 'copy', pattern: '*.assembly-corrected.nanopolish-polished.fasta'
+    publishDir params.output, mode: 'copy', pattern: '*.assembly.racon.nanopolish.fasta'
 
     input:
         file(assembly) from assembly_for_nanopolish_f2
@@ -275,7 +275,7 @@ process polishingWithNanopolish {
         set file(index), file(fai), file(gzi), file(readdb) from nanopolish_index_files_f2
 
     output:
-        file('*.assembly-corrected.nanopolish-polished.fasta') into nanopolished_assembly
+        file('*.assembly.racon.nanopolish.fasta') into nanopolished_assembly
         file(origReads) into reads_for_repolishing
 
     script:
@@ -285,7 +285,7 @@ process polishingWithNanopolish {
 
         nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b "${reads.getBaseName()}.assembly-alignment.bam" -g "${assembly}" -o polished.vcf
         nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > assembly.fasta;
-        awk '/^>/{print ">nanopolish.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".assembly-corrected.nanopolish-polished.fasta
+        awk '/^>/{print ">nanopolish.contig" ++i; next}{print}' < assembly.fasta > "${assembly.getSimpleName()}".assembly.racon.nanopolish.fasta
         """
 }
 
@@ -295,19 +295,19 @@ nanopolished_assembly.into {assembly_polished_using_signal; nanopolished_assembl
     do some further polishing of the nanopolished assembly, using medaka and the original reads
 */
 process repolishingWithMedaka {
-	publishDir params.output, mode: 'copy', pattern: '*.assembly-corrected.nanopolish-polished.medaka-repolished.fasta'
+	publishDir params.output, mode: 'copy', pattern: '*.assembly.racon.nanopolish.medaka.fasta'
 
     input:
         file(assembly) from nanopolished_assembly_for_repolishing
     	file(reads) from reads_for_repolishing
 
     output:
-	   file('*.assembly-corrected.nanopolish-polished.medaka-repolished.fasta') into assembly_nanopolish_then_medaka
+	   file('*.assembly.racon.nanopolish.medaka.fasta') into assembly_nanopolish_then_medaka
 
 	script:
         """
         medaka_consensus -i "${reads}" -d "${assembly}" -o medaka -m "${params.medakaModel}" -t "${task.cpus}"
-        awk '/^>/{print ">nanopolish.medaka.contig" ++i; next}{print}' < medaka/consensus.fasta > ${reads.getBaseName()}.assembly-corrected.nanopolish-polished.medaka-repolished.fasta
+        awk '/^>/{print ">nanopolish.medaka.contig" ++i; next}{print}' < medaka/consensus.fasta > ${assembly.getSimpleName()}.assembly.racon.nanopolish.medaka.fasta
         """
 }
 

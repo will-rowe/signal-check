@@ -3,9 +3,9 @@ pipelineDir=${PWD}"/pipelines"
 fastqDir=${pipelineDir}"/data/test-ebov-subset/fastq_pass"
 fast5Dir=${pipelineDir}"/data/test-ebov-subset/fast5_pass"
 resultsDir=${pipelineDir}"/test-results"
-resultCheck1=${resultsDir}"/barcode-09.assembly-unpolished.fasta"
-resultCheck2=${resultsDir}"/barcode-09.assembly-corrected.medaka-polished.fasta"
-resultCheck3=${resultsDir}"/barcode-09.sub-sampled.assembly-corrected.nanopolish-polished.fasta"
+resultCheck1=${resultsDir}"/barcode-09.assembly.raw.fasta"
+resultCheck2=${resultsDir}"/barcode-09.assembly.racon.medaka.fasta"
+resultCheck3=${resultsDir}"/barcode-09.assembly.racon.nanopolish.fasta"
 
 cd ${pipelineDir}
 
