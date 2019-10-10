@@ -31,10 +31,10 @@ log.info " de novo long read assembly pipeline v${pipelineVersion}"
 log.info "-------------------------------------------------------"
 
 def summary = [:]
-summary['fastq dir']        = params.fastqDir
-summary['fast5 dir']        = params.fast5Dir
+summary['Directory with fastq']        = params.fastqDir
+summary['Directory with fast5']        = params.fast5Dir
 if (params.label != '') {
-    summary['prepend label'] = params.label
+    summary['File prepend label'] = params.label
 }
 summary['Barcodes'] = params.barcodes
 summary['Sequencing kit'] = params.seqKit

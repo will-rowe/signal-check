@@ -29,7 +29,7 @@ for fname in listdir(args.inputDir):
                 # for now just rename to barcode
                 # TODO: use a lookup table to add in a meaningful name here
                 if (args.label != ""):
-                    rename(args.inputDir + "/" + fname, args.inputDir + "/" + args.label + ".barcode-" + bc + ".fastq")
+                    rename(args.inputDir + "/" + fname, args.inputDir + "/" + args.label + "-barcode-" + bc + ".fastq")
                 else:
                     rename(args.inputDir + "/" + fname, args.inputDir + "/" + "barcode-" + bc + ".fastq")
             else:
