@@ -19,35 +19,41 @@ There are two nextflow pipelines for long read genome assembly:
 * [long-read-assembly-dn](pipelines/long-read-assembly-dn.nf) for `de novo`
 * [long-read-assembly-rg](pipelines/long-read-assembly-rg.nf) for `reference guided`
 
-The basic steps of the pipelines are:
+The basic steps of the de novo pipeline are:
 
-* demux and trim basecalled reads
-* assemble
-* correct the assemblies
+* demux and trim basecalled reads with qcat
+* assemble (miniasm or redbean)
+* correct the assemblies with racon
+* subsample reads with pomoxis (subsampling for nanopolish only)
 * polish, either:
-  * without signal
-  * with signal
-  * with signal first, then without
-  * without signal first, then with
-* basic assessment of the assemblies
+  * without signal (medaka)
+  * with signal (nanopolish)
+  * with signal first, then without (nanopolish -> medaka)
+  * without signal first, then with (medaka -> nanopolish)
+* basic assessment of the assemblies with quast
 
-There are a few choices of software for each step (e.g. miniasm or redbean for de-novo assembly)
+The steps of the reference guided pipeline are:
+
 
 ### workbooks
 
-Each workbook will take you from `data download` -> `de novo genome assembly` -> `assessment` -> `reference guided assembly` -> `assessment`.
+[1.data-wrangling-and-pipelines](1.data-wrangling-and-pipelines.ipynb)
 
-There are two works books:
+* download the reference and experimental data
+* run the de-novo assembly pipeline
+* run the reference guided pipeline
+* sanity check the results against RefSeq
 
-* [analysis-r941_min_fast](analysis-r941_min_fast.ipynb) for analysing data produced from GUPPY `fast` basecalling
-* [analysis-r941_min_high](analysis-r941_min_high.ipynb) for analysing data produced from GUPPY `high accuracy` basecalling
+[2.evaluating-mayinga-assemblies](2.evaluating-mayinga-assemblies.ipynb)
 
-> note: only reads generated using the fast model are available for download, you will have to basecall using HAC yourself.
+* compute consensus identity
+* determine structural and nucleotide differences
+* visualise alignments
+
 
 ### data
 
-We use data from the latest [artic data release](http://artic.network/protocol_validation_2019.html). In particular, the Ebola virus (EBOV) minion run that amplicon sequenced 3 strains of the virus (Mayinga, Kikwit, Makona) using the rapid PCR kit.
-
+We use data from the latest [artic data release](http://artic.network/protocol_validation_2019.html). In particular, the Ebola virus (EBOV) minion run that sequenced 3 strains of the virus (Mayinga, Kikwit, Makona) using the metagenomic protocol and rapid PCR kit.
 
 ## Running the analysis
 
@@ -58,10 +64,10 @@ conda env create -f pipelines/environments/notebook-analysis.yaml
 conda activate notebook-analysis
 ```
 
-* open the notebook:
+* open the first notebook:
 
 ```
-jupyter notebook analysis-r941_min_fast.ipynb
+jupyter notebook 1.data-wrangling-and-pipelines.ipynb
 ```
 
 ## Standalone running of the pipeline
@@ -82,7 +88,6 @@ nextflow run pipelines/long-read-assembly-pipeline-dn.nf --fastqDir </path/to/fa
 
 ## Todo
 
-* put nanopolish index command in a separate process so that it is only called once
 * add in help message and full param descript
 * get more info from the qcat process (using the parsing script)
 * add in pre-run checks for reads etc.
@@ -93,3 +98,4 @@ nextflow run pipelines/long-read-assembly-pipeline-dn.nf --fastqDir </path/to/fa
 ## Notes
 
 * medaka renames the contigs to include range data, which then breaks Nanopolish - so contigs are renamed sequentially after medaka
+ - actually, all contigs are now renamed according to polishing tool used - this makes downstream processing easier
