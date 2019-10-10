@@ -33,6 +33,9 @@ log.info "-------------------------------------------------------"
 def summary = [:]
 summary['fastq dir']        = params.fastqDir
 summary['fast5 dir']        = params.fast5Dir
+if (params.label != '') {
+    summary['prepend label'] = params.label
+}
 summary['Barcodes'] = params.barcodes
 summary['Sequencing kit'] = params.seqKit
 if (params.subSamplingDepth != 0) {
@@ -75,13 +78,13 @@ process demuxingReads {
        
 
     output:
-	   file('demuxed_reads/barcode-*.fastq') into trimmed_reads_for_assembly
+	   file('demuxed_reads/*arcode-*.fastq') into trimmed_reads_for_assembly
 
 	script:
         """
         echo "[info] demuxing reads, trimming and keeping barcodes "${params.barcodes}""
         cat "${fastqDir}"/*.fastq | qcat --threads "${task.cpus}" --guppy --trim --kit "${params.seqKit}" --min-score "${params.minQualScore}" -b demuxed_reads
-        qcat-parser.py demuxed_reads "${params.barcodes}"
+        qcat-parser.py demuxed_reads "${params.barcodes}" "${params.label}"
         """
 }
 
@@ -170,8 +173,9 @@ process subsamplingReads {
             minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
             samtools index ${reads.getBaseName()}.assembly-alignment.bam
             subsample_bam -t "${task.cpus}" -o sub_sampled ${reads.getBaseName()}.assembly-alignment.bam "${params.subSamplingDepth}"
-            mv sub_sampled*.bam ${reads.getBaseName()}.assembly-alignment.bam
-            samtools fastq ${reads.getBaseName()}.assembly-alignment.bam > ${reads.getBaseName()}.sub-sampled.fq
+            for i in sub_sampled*.bam; do
+            samtools fastq \$i >> ${reads.getBaseName()}.sub-sampled.fq;
+            done
             """
         else
             """
@@ -190,6 +194,7 @@ subsampled_reads.into {reads_for_nanopolish_indexing; reads_for_nanopolish_f1; r
     run nanopolish index in it's own process so we don't need to run it multiple times
 */
 process nanopolishIndexing {
+    echo false
     input:
         file(reads) from reads_for_nanopolish_indexing
         val(fast5Dir) from params.fast5Dir
@@ -199,6 +204,7 @@ process nanopolishIndexing {
 
     script:
         """
+        echo "nanopolish indexing"
         nanopolish index -d "${fast5Dir}" "${reads}"
         """
 }
@@ -252,8 +258,8 @@ process repolishingWithNanopolish {
         minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
         samtools index ${reads.getBaseName()}.assembly-alignment.bam
 
-        nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b ${reads.getBaseName()}.assembly-alignment.bam -g "${assembly}" -o polished.vcf
-        nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > assembly.fasta;
+        nanopolish_makerange.py "${assembly}" | parallel --results nanopolish.results -P "${task.cpus}" nanopolish variants --consensus -o polished.{1}.vcf -w {1} -r "${reads}" -b ${reads.getBaseName()}.assembly-alignment.bam -g "${assembly}" -t 4 --min-candidate-frequency 0.1
+        nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.*.vcf > assembly.fasta;
         awk '/^>/{print ">medaka.nanopolish.contig" ++i; next}{print}' < assembly.fasta > "${assembly.getSimpleName()}".assembly.racon.medaka.nanopolish.fasta
         """
 }
@@ -283,8 +289,8 @@ process polishingWithNanopolish {
         minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
         samtools index ${reads.getBaseName()}.assembly-alignment.bam
 
-        nanopolish variants --consensus -t "${task.cpus}" -r "${reads}" -b "${reads.getBaseName()}.assembly-alignment.bam" -g "${assembly}" -o polished.vcf
-        nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.vcf > assembly.fasta;
+        nanopolish_makerange.py "${assembly}" | parallel --results nanopolish.results -P "${task.cpus}" nanopolish variants --consensus -o polished.{1}.vcf -w {1} -r "${reads}" -b ${reads.getBaseName()}.assembly-alignment.bam -g "${assembly}" -t 4 --min-candidate-frequency 0.1
+        nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.*.vcf > assembly.fasta;
         awk '/^>/{print ">nanopolish.contig" ++i; next}{print}' < assembly.fasta > "${assembly.getSimpleName()}".assembly.racon.nanopolish.fasta
         """
 }

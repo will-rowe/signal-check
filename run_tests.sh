@@ -3,9 +3,9 @@ pipelineDir=${PWD}"/pipelines"
 fastqDir=${pipelineDir}"/data/test-ebov-subset/fastq_pass"
 fast5Dir=${pipelineDir}"/data/test-ebov-subset/fast5_pass"
 resultsDir=${pipelineDir}"/test-results"
-resultCheck1=${resultsDir}"/barcode-09.assembly.raw.fasta"
-resultCheck2=${resultsDir}"/barcode-09.assembly.racon.medaka.fasta"
-resultCheck3=${resultsDir}"/barcode-09.assembly.racon.nanopolish.fasta"
+resultCheck1=${resultsDir}"/test-barcode-09.assembly.raw.fasta"
+resultCheck2=${resultsDir}"/test-barcode-09.assembly.racon.medaka.fasta"
+resultCheck3=${resultsDir}"/test-barcode-09.assembly.racon.nanopolish.fasta"
 
 cd ${pipelineDir}
 
@@ -19,6 +19,7 @@ testCmd="nextflow run long-read-assembly-dn.nf \
     --barcodes 09, \
     --output ${resultsDir} \
     --subSamplingDepth 1 \
+    --label test- \
     -resume"
 
 echo "starting nextflow pipeline..."
