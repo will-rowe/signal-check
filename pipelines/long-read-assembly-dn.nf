@@ -187,7 +187,7 @@ process subsamplingReads {
 
 // copy the assembly and reads channel so that we can fork the pipeline
 subsampled_assembly.into {assembly_for_medaka_f1; assembly_for_nanopolish_f2}
-subsampled_reads_original.into {reads_for_medaka_f1; reads_for_medaka_f2}
+subsampled_reads_original.into {reads_for_medaka_f1; reads_for_medaka_f2; reads_for_quast}
 subsampled_reads.into {reads_for_nanopolish_indexing; reads_for_nanopolish_f1; reads_for_nanopolish_f2}
 
 /*
@@ -322,32 +322,39 @@ process repolishingWithMedaka {
 */
 
 /*
-    do some assessment of assemblies
+    do some assessment of assemblies with quast, map reads back to with minimap2, get depth plots
 */
 process assessAssemblies {
-    publishDir params.output, mode: 'copy', pattern: 'quast_reports.tar'
+    echo true
+    publishDir params.output, mode: 'copy', pattern: 'assembly-qc.tar'
 
     input:
         file(assembly1) from assembly_polished_without_using_signal
         file(assembly2) from assembly_polished_using_signal
         file(assembly3) from assembly_nanopolish_then_medaka
         file(assembly4) from assembly_medaka_then_nanopolish
+        file(reads) from reads_for_quast
 
     output:
-        file('quast_reports.tar') into assembly_assessed
+        file('assembly-qc.tar') into assembly_assessed
 
     script:
         """
-        quast.py -o quast_polished_with_medaka -t "${task.cpus}" --circos "${assembly1}"
-        quast.py -o quast_polished_with_nanopolish -t "${task.cpus}" --circos "${assembly2}"
-        quast.py -o quast_nanopolish_then_medaka -t "${task.cpus}" --circos "${assembly3}"
-        quast.py -o quast_medaka_then_nanopolish -t "${task.cpus}" --circos "${assembly4}"
+        array=("${assembly1}" "${assembly2}" "${assembly3}" "${assembly4}")
 
-        mkdir quast_reports
-        mv quast_polished_with_medaka quast_reports/
-        mv quast_polished_with_nanopolish quast_reports/
-        mv quast_nanopolish_then_medaka quast_reports/
-        mv quast_medaka_then_nanopolish quast_reports/
-        tar -cvf quast_reports.tar quast_reports
+        echo "${reads}" "${assembly1}" "${assembly2}" "${assembly3}" "${assembly4}"
+
+        for i in \${array[@]};
+        do
+        echo \$i;
+        quast.py -o \${i%%.fasta}.quast -t "${task.cpus}" --circos \$i
+        minimap2 -ax map-ont -t"${task.cpus}" \$i "${reads}" |  samtools view -bS - | samtools sort - -o \${i%%.fasta}.bam && samtools index \${i%%.fasta}.bam && samtools depth \${i%%.fasta}.bam > \${i%%.fasta}.depth
+        plot-bam-depth.py \${i%%.fasta}.depth \${i%%.fasta}
+        done
+
+        mkdir assembly-qc
+        mv *.quast assembly-qc/
+        mv *.png assembly-qc
+        tar -cvf assembly-qc.tar assembly-qc
         """
 }

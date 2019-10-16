@@ -1,8 +1,7 @@
 FROM continuumio/miniconda3:latest
 COPY environment.yaml .
 
-RUN conda update -n base -c defaults conda && \
-    conda env create -f environment.yaml && \
+RUN conda env create -f environment.yaml && \
     conda clean -afy
 
 ENV PATH /opt/conda/envs/dockerisedProcess/bin:$PATH
