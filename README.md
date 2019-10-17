@@ -10,38 +10,35 @@
 
 ## Overview
 
-This is a set of pipelines and workbooks for checking the usefulness of signal-data (for viral metagenomics); helping to decide if/where to keep it.
+This is a long read assembly pipeline and set of workbooks for checking the usefulness of signal-data (for viral metagenomics); helping to decide if/where to keep it.
 
-### pipelines
+### pipeline
 
-There are two nextflow pipelines for long read genome assembly:
-
-* [long-read-assembly-dn](pipelines/long-read-assembly-dn.nf) for `de novo`
-* [long-read-assembly-rg](pipelines/long-read-assembly-rg.nf) for `reference guided`
-
-The basic steps of the de novo pipeline are:
+There is one nextflow pipeline for both reference-guided and de-novo long read genome assembly.
 
 * demux and trim basecalled reads with qcat
-* assemble (miniasm or redbean)
-* correct the assemblies with racon
-* subsample reads with pomoxis (subsampling for nanopolish only)
-* polish, either:
+* reference guided assembly
+  * uses pomoxis (minimap2/miniasm/racon)
+* de novo assembly
+  * assembles with either miniasm or redbean
+  * corrects with racon
+* polishing  
+  * optional read subsampling with pomoxis (subsampling used for nanopolish only)
   * without signal (medaka)
   * with signal (nanopolish)
   * with signal first, then without (nanopolish -> medaka)
   * without signal first, then with (medaka -> nanopolish)
-* basic assessment of the assemblies with quast
-
-The steps of the reference guided pipeline are:
-
+* basic assessment
+  * quast
+  * depth plots
 
 ### workbooks
 
 [1.data-wrangling-and-pipelines](1.data-wrangling-and-pipelines.ipynb)
 
-* download the reference and experimental data
-* run the de-novo assembly pipeline
-* run the reference guided pipeline
+* download both the reference and experimental data
+* run the assembly pipeline on basecalled data (guppy fast model)
+* run the assembly pipeline on basecalled data (guppy high accuracy model)
 * sanity check the results against RefSeq
 
 [2.evaluating-mayinga-assemblies](2.evaluating-mayinga-assemblies.ipynb)
@@ -75,7 +72,7 @@ jupyter notebook 1.data-wrangling-and-pipelines.ipynb
 If you have nextflow and conda installed, you just need:
 
 ```
-nextflow run pipelines/long-read-assembly-pipeline-dn.nf --fastqDir </path/to/fastq_pass> --fast5Dir <path/to/fast5_pass> --barcodes 09,10,11 --output <output directory> -profile conda --cpus 6 --mem 12GB
+nextflow run pipelines/long-read-assembly-pipeline.nf --fastqDir </path/to/fastq_pass> --fast5Dir <path/to/fast5_pass> --refGenome <path/to/ref> --barcodes 09,10,11 --output <output directory> -profile conda --cpus 6 --mem 12GB
 ```
 
 > to run using Docker instead, swap the `-profile` over to docker
@@ -90,10 +87,10 @@ nextflow run pipelines/long-read-assembly-pipeline-dn.nf --fastqDir </path/to/fa
 
 * add in help message and full param descript
 * get more info from the qcat process (using the parsing script)
-* add in pre-run checks for reads etc.
-* output visualisation of MSA / pileup
+* add in pre-run checks for reads, ref genome etc.
 * add pycoqc
 * Redbean assemblies aren't great, I need to try parameterising this better
+
 
 ## Notes
 

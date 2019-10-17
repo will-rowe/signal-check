@@ -1,50 +1,59 @@
 #!/usr/bin/env bash
 pipelineDir=${PWD}"/pipelines"
-fastqDir=${pipelineDir}"/data/test-ebov-subset/fastq_pass"
-fast5Dir=${pipelineDir}"/data/test-ebov-subset/fast5_pass"
+fastqDir=${pipelineDir}"/data/ebov-test-data/fastq_pass"
+fast5Dir=${pipelineDir}"/data/ebov-test-data/fast5_pass"
+refGenome=${pipelineDir}"/data/ebov-reference-genomes/NC_002549.fasta"
 resultsDir=${pipelineDir}"/test-results"
-resultCheck1=${resultsDir}"/testing-barcode-09.assembly.raw.fasta"
-resultCheck2=${resultsDir}"/testing-barcode-09.assembly.racon.medaka.fasta"
-resultCheck3=${resultsDir}"/testing-barcode-09.assembly.racon.nanopolish.fasta"
+resultCheck1=${resultsDir}"/de-novo-assembly/testing-barcode-09.dn-assembly.raw.fasta"
+resultCheck2=${resultsDir}"/de-novo-assembly/testing-barcode-09.dn-assembly.racon.medaka.fasta"
+resultCheck3=${resultsDir}"/de-novo-assembly/testing-barcode-09.dn-assembly.racon.nanopolish.fasta"
+resultCheck4=${resultsDir}"/reference-guided-assembly/testing-barcode-09.rg-assembly.racon.fasta"
 
 cd ${pipelineDir}
 
-testCmd="nextflow run long-read-assembly-dn.nf \
+pipeline="nextflow run long-read-assembly.nf \
     -profile docker \
-    -with-dag flowchart.png \
-    --cpus 2 \
-    --mem 4GB \
+    -with-dag flow.png \
+    --cpus 8 \
+    --mem 10GB \
     --fastqDir ${fastqDir} \
     --fast5Dir ${fast5Dir} \
     --barcodes 09, \
     --output ${resultsDir} \
     --subSamplingDepth 1 \
     --label testing \
+    --refGenome ${refGenome} \
     -resume"
 
-echo "starting nextflow pipeline..."
-echo $testCmd
+echo "starting assembly pipeline..."
+echo $pipeline
 echo "-------------------------------------------------------"
-eval $testCmd
+eval $pipeline
 echo "-------------------------------------------------------"
 
 echo "checking output..."
 if test -f "$resultCheck1"; then
-    echo "check for initial assembly passed"
+    echo "check for initial dn-assembly passed"
 else
-    echo "check for initial assembly failed"
+    echo "check for initial dn-assembly failed"
     exit 1
 fi
 if test -f "$resultCheck2"; then
-    echo "check for medaka polished assembly passed"
+    echo "check for medaka polished dn-assembly passed"
 else
-    echo "check for medaka polished assembly failed"
+    echo "check for medaka polished dn-assembly failed"
     exit 1
 fi
 if test -f "$resultCheck3"; then
-    echo "check for nanopolish polished assembly passed"
+    echo "check for nanopolish polished dn-assembly passed"
 else
-    echo "check for nanopolish polished assembly failed"
+    echo "check for nanopolish polished dn-assembly failed"
+    exit 1
+fi
+if test -f "$resultCheck4"; then
+    echo "check for initial rg-assembly passed"
+else
+    echo "check for initial rg-assembly failed"
     exit 1
 fi
 
