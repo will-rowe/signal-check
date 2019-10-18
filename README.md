@@ -14,9 +14,13 @@ This is a long read assembly pipeline and set of workbooks for checking the usef
 
 ### pipeline
 
-There is one nextflow pipeline for both reference-guided and de-novo long read genome assembly.
+There is one nextflow pipeline for both reference-guided and de-novo long read genome assembly, as well as a variant call-> consensus approach.
 
 * demux and trim basecalled reads with qcat
+* reference alignment and variant call
+  * align with minimap2
+  * variant call with signal (nanopolish)
+  * variant call without signal (medaka)
 * reference guided assembly
   * uses pomoxis (minimap2/miniasm/racon)
 * de novo assembly
@@ -72,10 +76,12 @@ jupyter notebook 1.data-wrangling-and-assembly-pipeline.ipynb
 If you have nextflow and conda installed, you just need:
 
 ```
-nextflow run pipelines/long-read-assembly-pipeline.nf --fastqDir </path/to/fastq_pass> --fast5Dir <path/to/fast5_pass> --refGenomes <path/to/ref> --barcodes 09,10,11 --output <output directory> -profile conda --cpus 6 --mem 12GB
+nextflow run pipelines/long-read-assembly-pipeline.nf --fastqDir </path/to/fastq_pass> --fast5Dir <path/to/fast5_pass> --refGenomes <path/to/refGenomes> --barcodes 09,10,11 --output <output directory> -profile conda --cpus 6 --mem 12GB
 ```
 
 > to run using Docker instead, swap the `-profile` over to docker
+
+> refGenome is a multifasta of reference genomes, where each fasta header must be prefixed with `barcode-XX---` (e.g. >barcode-09---genomeA) to map the ref to sample
 
 ## Pipeline dags
 
