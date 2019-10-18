@@ -79,6 +79,12 @@ workflow.onError {
 }
 
 /*
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    START THE PROCESSES:
+    /////////////////////////////////////////////////////////////////////////////////////////////
+*/
+
+/*
     do some demuxing and trimming
 */
 process demuxingReads {
@@ -99,7 +105,7 @@ process demuxingReads {
         """
 }
 
-trimmed_reads.into {reads_for_alignment; reads_for_rg_assembly; reads_for_dn_assembly}
+trimmed_reads.into {reads_for_alignment; reads_for_variant_calling; reads_for_rg_assembly; reads_for_dn_assembly; reads_for_quast}
 
 /*
     do an alignment to the specified reference genome
@@ -114,7 +120,9 @@ process referenceAlignment {
         file(refGenomes) from params.refGenomes
 
     output:
-        file('*.bam') into reference_alignments
+        file('*.ref-alignment.bam') into reference_alignments
+        file('refGenome.fasta') into reference_sequence
+        file(reads) into reads_for_subsampling
         file('*.png') into alignment_pngs
 
     script:
@@ -138,10 +146,62 @@ process referenceAlignment {
         """
 }
 
+reference_alignments.into{alignments_for_subsampling; alignments_for_variant_calling}
 
+/*
+    do some read subsampling if requested
+*/
+process subsamplingReads {
+    echo false
+    
+    input:
+    	file(alignment) from alignments_for_subsampling
+        file(reads) from reads_for_subsampling
 
+    output:
+        file('*.sub-sampled.fq') into subsampled_reads
 
+    script:
+        if (params.subSamplingDepth != 0)
+            """
+            samtools index ${alignment}
+            subsample_bam -t "${task.cpus}" -o sub_sampled "${alignment}" "${params.subSamplingDepth}"
+            for i in sub_sampled*.bam; do
+            samtools fastq \$i >> ${reads.getBaseName()}.sub-sampled.fq;
+            done
+            """
+        else
+            """
+            echo "[info] skipping read sub-sampling for ${reads.getBaseName()}"
+            mv "${reads}" ${reads.getBaseName()}.sub-sampled.fq
+            """
+}
 
+/*
+    run nanopolish index on the subsampled reads (or original if no subsampling was requested)
+*/
+process nanopolishIndexing {
+    input:
+        file(reads) from subsampled_reads
+        val(fast5Dir) from params.fast5Dir
+
+    output:
+        set file(reads), file('*.index'), file('*.fai'), file('*.gzi'), file('*.readdb') into nanopolish_index_files
+
+    script:
+        """
+        nanopolish index -d "${fast5Dir}" "${reads}"
+        """
+}
+
+// copy the nanopolish index files for each fork
+nanopolish_index_files.into {nanopolish_index_files_for_dn_assemblies; nanopolish_index_files_for_variant_calling}
+
+/*
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    SPLIT THE PIPELINE: variant calling, reference guided assembly, de novo assembly
+    /////////////////////////////////////////////////////////////////////////////////////////////
+*/
 
 /*
     /////////////////////////////////////////////////////////////////////////////////////////////
@@ -149,6 +209,24 @@ process referenceAlignment {
     /////////////////////////////////////////////////////////////////////////////////////////////
 */
 
+/*
+    variant call with medaka
+*/
+process variantcallWithMedaka {
+    publishDir params.output + "/reference-alignment", mode: 'copy', pattern: 'medaka_variant/*.vcf'
+
+    input:
+        file(alignment) from alignments_for_variant_calling
+        file(reference) from reference_sequence
+
+    output:
+        file('medaka_variant/*.vcf') into vcfs
+
+    script:
+        """
+        medaka_variant -f ${reference} -i ${alignment} -m ${params.medakaModel} -s ${params.medakaModel} -d -t ${task.cpus} -o medaka_variant
+        """
+}
 
 
 
@@ -218,7 +296,7 @@ process assemblingReadsDN {
         file(reads) from reads_for_dn_assembly.flatten()
 
     output:
-        file('*.dn-assembly.raw.fasta') into assembly_for_correction
+        file('*.dn-assembly.raw.fasta') into dn_assembly_for_correction
         file(reads) into trimmed_reads_for_correction
 
     script:
@@ -242,14 +320,14 @@ process assemblingReadsDN {
 /*
     do some assembly correction with x rounds of racon
 */
-process correctingAssemblyWithRacon {
+process correctingAssemblyWithRaconDN {
     input:
-        file(assembly) from assembly_for_correction
+        file(assembly) from dn_assembly_for_correction
     	file(reads) from trimmed_reads_for_correction
 
     output:
-	   file('*.dn-assembly.racon.fasta') into corrected_assembly
-       file(reads) into trimmed_reads_from_racon
+	   file('*.dn-assembly.racon.fasta') into corrected_dn_assembly
+       file(reads) into trimmed_reads_post_racon
 
 	script:
         """
@@ -269,86 +347,24 @@ process correctingAssemblyWithRacon {
         """
 }
 
-
 /*
-    do some read subsampling if requested
+    fork the de novo assembly pathway
 */
-process subsamplingReads {
-    echo false
-    
-    input:
-    	file(assembly) from corrected_assembly
-        file(reads) from trimmed_reads_from_racon
-
-    output:
-        file(assembly) into subsampled_assembly
-        file(reads) into subsampled_reads_original
-        file('*.sub-sampled.fq') into subsampled_reads
-
-    script:
-        if (params.subSamplingDepth != 0)
-            """
-            echo "[info] subsampling reads for ${reads.getBaseName()}, using "${reads}" and "${assembly}""
-            minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
-            samtools index ${reads.getBaseName()}.assembly-alignment.bam
-            subsample_bam -t "${task.cpus}" -o sub_sampled ${reads.getBaseName()}.assembly-alignment.bam "${params.subSamplingDepth}"
-            for i in sub_sampled*.bam; do
-            samtools fastq \$i >> ${reads.getBaseName()}.sub-sampled.fq;
-            done
-            """
-        else
-            """
-            echo "[info] skipping read sub-sampling for ${reads.getBaseName()}"
-            mv "${reads}" ${reads.getBaseName()}.sub-sampled.fq
-            """
-}
-
-
-// copy the assembly and reads channel so that we can fork the pipeline
-subsampled_assembly.into {assembly_for_medaka_f1; assembly_for_nanopolish_f2}
-subsampled_reads_original.into {reads_for_medaka_f1; reads_for_medaka_f2; reads_for_quast}
-subsampled_reads.into {reads_for_nanopolish_indexing; reads_for_nanopolish_f1; reads_for_nanopolish_f2}
-
-/*
-    run nanopolish index in it's own process so we don't need to run it multiple times
-*/
-process nanopolishIndexing {
-    input:
-        file(reads) from reads_for_nanopolish_indexing
-        val(fast5Dir) from params.fast5Dir
-
-    output:
-        set file ('*.index'), file('*.fai'), file('*.gzi'), file('*.readdb') into nanopolish_index_files
-
-    script:
-        """
-        nanopolish index -d "${fast5Dir}" "${reads}"
-        """
-}
-
-// copy the nanopolish index files for each fork
-nanopolish_index_files.into {nanopolish_index_files_f1; nanopolish_index_files_f2}
-
-/*
-    /////////////////////////////////////////////////////////////////////////////////////////////
-    DE NOVO FORK 1:
-    /////////////////////////////////////////////////////////////////////////////////////////////
-*/
+corrected_dn_assembly.into{dn_assembly_for_medaka; dn_assembly_for_nanopolish}
+trimmed_reads_post_racon.into{reads_for_medaka_f1; reads_for_medaka_f2}
 
 /*
     do some polishing with medaka
 */
-process polishingWithMedaka {
+process polishingWithMedakaDN {
 	publishDir params.output + "/de-novo-assembly", mode: 'copy', pattern: '*.dn-assembly.racon.medaka.fasta'
 
     input:
-        file(assembly) from assembly_for_medaka_f1
+        file(assembly) from dn_assembly_for_medaka
     	file(reads) from reads_for_medaka_f1
-        file(subsampledReads) from reads_for_nanopolish_f1
 
     output:
-	   file('*.dn-assembly.racon.medaka.fasta') into medaka_polished_assembly
-       file(subsampledReads) into reads_for_repolishing_with_nanopolish
+	   file('*.dn-assembly.racon.medaka.fasta') into medaka_polished_dn_assembly
 
 	script:
         """
@@ -357,26 +373,25 @@ process polishingWithMedaka {
         """
 }
 
-medaka_polished_assembly.into {assembly_polished_without_using_signal; medaka_polished_assembly_for_repolishing}
+medaka_polished_dn_assembly.into{dn_assembly_polished_without_using_signal; medaka_polished_dn_assembly_for_repolishing}
+nanopolish_index_files_for_dn_assemblies.into{nif_dn_repolishing; nif_dn_polishing}
 
 /*
     do some further polishing of the medaka polished assembly, using nanopolish
 */
-process repolishingWithNanopolish {
+process repolishingWithNanopolishDN {
 	publishDir params.output + "/de-novo-assembly", mode: 'copy', pattern: '*.dn-assembly.racon.medaka.nanopolish.fasta'
     input:
-        file(assembly) from medaka_polished_assembly_for_repolishing
-    	file(reads) from reads_for_repolishing_with_nanopolish
-        set file(index), file(fai), file(gzi), file(readdb) from nanopolish_index_files_f1
+        file(assembly) from medaka_polished_dn_assembly_for_repolishing
+        set file(reads), file(index), file(fai), file(gzi), file(readdb) from nif_dn_repolishing
 
     output:
-	   file('*.dn-assembly.racon.medaka.nanopolish.fasta') into assembly_medaka_then_nanopolish
+	   file('*.dn-assembly.racon.medaka.nanopolish.fasta') into dn_assembly_medaka_then_nanopolish
 
     script:
         """
         minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
         samtools index ${reads.getBaseName()}.assembly-alignment.bam
-
         nanopolish_makerange.py "${assembly}" | parallel --results nanopolish.results -P "${task.cpus}" nanopolish variants --consensus -o polished.{1}.vcf -w {1} -r "${reads}" -b ${reads.getBaseName()}.assembly-alignment.bam -g "${assembly}" -t 4 --min-candidate-frequency 0.1
         nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.*.vcf > assembly.fasta;
         awk '/^>/{print ">medaka.nanopolish.contig" ++i; next}{print}' < assembly.fasta > "${assembly.getSimpleName()}".dn-assembly.racon.medaka.nanopolish.fasta
@@ -392,18 +407,15 @@ process repolishingWithNanopolish {
 /*
     do some polishing with nanopolish
 */
-process polishingWithNanopolish {
+process polishingWithNanopolishDN {
     publishDir params.output + "/de-novo-assembly", mode: 'copy', pattern: '*.dn-assembly.racon.nanopolish.fasta'
 
     input:
-        file(assembly) from assembly_for_nanopolish_f2
-        file(reads) from reads_for_nanopolish_f2
-        file(origReads) from reads_for_medaka_f2
-        set file(index), file(fai), file(gzi), file(readdb) from nanopolish_index_files_f2
+        file(assembly) from dn_assembly_for_nanopolish
+        set file(reads), file(index), file(fai), file(gzi), file(readdb) from nif_dn_polishing
 
     output:
-        file('*.dn-assembly.racon.nanopolish.fasta') into nanopolished_assembly
-        file(origReads) into reads_for_repolishing
+        file('*.dn-assembly.racon.nanopolish.fasta') into nanopolished_dn_assembly
 
     script:
         """
@@ -416,20 +428,20 @@ process polishingWithNanopolish {
         """
 }
 
-nanopolished_assembly.into {assembly_polished_using_signal; nanopolished_assembly_for_repolishing}
+nanopolished_dn_assembly.into {dn_assembly_polished_using_signal; nanopolished_dn_assembly_for_repolishing}
 
 /*
     do some further polishing of the nanopolished assembly, using medaka and the original reads
 */
-process repolishingWithMedaka {
+process repolishingWithMedakaDN {
 	publishDir params.output + "/de-novo-assembly", mode: 'copy', pattern: '*.dn-assembly.racon.nanopolish.medaka.fasta'
 
     input:
-        file(assembly) from nanopolished_assembly_for_repolishing
-    	file(reads) from reads_for_repolishing
+        file(assembly) from nanopolished_dn_assembly_for_repolishing
+        file(reads) from reads_for_medaka_f2
 
     output:
-	   file('*.dn-assembly.racon.nanopolish.medaka.fasta') into assembly_nanopolish_then_medaka
+	   file('*.dn-assembly.racon.nanopolish.medaka.fasta') into dn_assembly_nanopolish_then_medaka
 
 	script:
         """
@@ -452,10 +464,10 @@ process assessAssemblies {
     publishDir params.output + "/de-novo-assembly", mode: 'copy', pattern: 'assembly-qc.tar'
 
     input:
-        file(assembly1) from assembly_polished_without_using_signal
-        file(assembly2) from assembly_polished_using_signal
-        file(assembly3) from assembly_nanopolish_then_medaka
-        file(assembly4) from assembly_medaka_then_nanopolish
+        file(assembly1) from dn_assembly_polished_without_using_signal
+        file(assembly2) from dn_assembly_polished_using_signal
+        file(assembly3) from dn_assembly_nanopolish_then_medaka
+        file(assembly4) from dn_assembly_medaka_then_nanopolish
         file(reads) from reads_for_quast
 
     output:
