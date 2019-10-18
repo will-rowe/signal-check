@@ -59,5 +59,5 @@ fi
 
 echo "cleaning up..."
 rm -rf work
-rm -rf ${resultsDir}
 rm -rf .nextflo*
+rm -rf ${resultsDir}

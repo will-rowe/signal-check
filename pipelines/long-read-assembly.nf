@@ -105,7 +105,7 @@ process demuxingReads {
         """
 }
 
-trimmed_reads.into {reads_for_alignment; reads_for_variant_calling; reads_for_rg_assembly; reads_for_dn_assembly; reads_for_quast}
+trimmed_reads.into {reads_for_alignment; reads_for_rg_assembly; reads_for_dn_assembly; reads_for_quast}
 
 /*
     do an alignment to the specified reference genome
@@ -147,6 +147,7 @@ process referenceAlignment {
 }
 
 reference_alignments.into{alignments_for_subsampling; alignments_for_variant_calling}
+reference_sequence.into{reference_for_medaka_variant_calling; reference_for_nanopolish_variant_calling}
 
 /*
     do some read subsampling if requested
@@ -217,10 +218,10 @@ process variantcallWithMedaka {
 
     input:
         file(alignment) from alignments_for_variant_calling
-        file(reference) from reference_sequence
+        file(reference) from reference_for_medaka_variant_calling
 
     output:
-        file('medaka_variant/*.vcf') into vcfs
+        file('medaka_variant/*.vcf') into medaka_vcfs
 
     script:
         """
@@ -228,7 +229,28 @@ process variantcallWithMedaka {
         """
 }
 
+/*
+    variant call with nanopolish
+*/
+process variantcallWithNanopolish {
+    publishDir params.output + "/reference-alignment", mode: 'copy', pattern: 'nanopolish_variants.vcf'
 
+    input:
+        file(reference) from reference_for_nanopolish_variant_calling
+        set file(reads), file(index), file(fai), file(gzi), file(readdb) from nanopolish_index_files_for_variant_calling
+
+    output:
+        file('nanopolish_variants.vcf') into nanopolish_vcfs
+
+    script:
+        """
+        minimap2 -ax map-ont -t ${task.cpus} ${reference} ${reads} | \
+        samtools view -bS - | \
+        samtools sort - -o ${reads.getBaseName()}.ref-alignment.bam
+        samtools index ${reads.getBaseName()}.ref-alignment.bam
+        nanopolish variants --reads ${reads} --bam ${reads.getBaseName()}.ref-alignment.bam --genome ${reference} -t ${task.cpus} --ploidy 1 --snps -o nanopolish_variants.vcf
+        """
+}
 
 
 

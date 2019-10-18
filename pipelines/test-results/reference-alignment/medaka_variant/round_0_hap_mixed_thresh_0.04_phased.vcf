@@ -1,0 +1,17 @@
+##fileformat=VCFv4.1
+##commandline="(whatshap 0.18) phase --reference /Users/willrowe/Desktop/signal-check/pipelines/work/e9/7250d1e064f2bc9588b360cb660cd6/refGenome.fasta -o round_0_hap_mixed_thresh_0.04_phased.vcf round_0_hap_mixed_thresh_0.04_unphased.vcf /Users/willrowe/Desktop/signal-check/pipelines/work/e9/7250d1e064f2bc9588b360cb660cd6/testing-barcode-09.ref-alignment.bam --ignore-read-groups"
+##INFO=<ID=ref_prob,Number=1,Type=Float,Description="Medaka probability for reference allele">
+##INFO=<ID=primary_prob,Number=1,Type=Float,Description="Medaka probability of primary call">
+##INFO=<ID=primary_call,Number=1,Type=String,Description="Medaka primary call">
+##INFO=<ID=secondary_prob,Number=1,Type=Float,Description="Medaka probability of secondary call">
+##INFO=<ID=secondary_call,Number=1,Type=String,Description="Medaka secondary call">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Medaka genotype">
+##FORMAT=<ID=GQ,Number=1,Type=Float,Description="Medaka genotype quality score">
+##FORMAT=<ID=PS,Number=1,Type=Integer,Description="Phase set identifier">
+##contig=<ID=barcode-09---NC_002549.1>
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	SAMPLE
+barcode-09---NC_002549.1	28	.	T	A	13.655	PASS	ref_prob=0.266;primary_prob=0.69;primary_call=A;secondary_prob=0.266;secondary_call=T	GT:GQ:PS	0|1:13.655:28
+barcode-09---NC_002549.1	31	.	G	C	12.697	PASS	ref_prob=0.683;primary_prob=0.683;primary_call=G;secondary_prob=0.263;secondary_call=C	GT:GQ:PS	0|1:12.697:28
+barcode-09---NC_002549.1	45	.	C	T	22.3	PASS	ref_prob=0.723;primary_prob=0.723;primary_call=C;secondary_prob=0.271;secondary_call=T	GT:GQ:PS	1|0:22.3:28
+barcode-09---NC_002549.1	7668	.	T	C	46.612	PASS	ref_prob=0.0;primary_prob=1.0;primary_call=C;secondary_prob=0.0;secondary_call=G	GT:GQ	1/1:46.612
+barcode-09---NC_002549.1	10733	.	A	G	44.781	PASS	ref_prob=0.941;primary_prob=0.941;primary_call=A;secondary_prob=0.059;secondary_call=G	GT:GQ	0/1:44.781
