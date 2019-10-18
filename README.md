@@ -34,7 +34,7 @@ There is one nextflow pipeline for both reference-guided and de-novo long read g
 
 ### workbooks
 
-[1.data-wrangling-and-pipelines](1.data-wrangling-and-pipelines.ipynb)
+[1.data-wrangling-and-assembly-pipeline](1.data-wrangling-and-assembly-pipeline.ipynb)
 
 * download both the reference and experimental data
 * run the assembly pipeline on basecalled data (guppy fast model)
@@ -64,7 +64,7 @@ conda activate notebook-analysis
 * open the first notebook:
 
 ```
-jupyter notebook 1.data-wrangling-and-pipelines.ipynb
+jupyter notebook 1.data-wrangling-and-assembly-pipeline.ipynb
 ```
 
 ## Standalone running of the pipeline
@@ -72,7 +72,7 @@ jupyter notebook 1.data-wrangling-and-pipelines.ipynb
 If you have nextflow and conda installed, you just need:
 
 ```
-nextflow run pipelines/long-read-assembly-pipeline.nf --fastqDir </path/to/fastq_pass> --fast5Dir <path/to/fast5_pass> --refGenome <path/to/ref> --barcodes 09,10,11 --output <output directory> -profile conda --cpus 6 --mem 12GB
+nextflow run pipelines/long-read-assembly-pipeline.nf --fastqDir </path/to/fastq_pass> --fast5Dir <path/to/fast5_pass> --refGenomes <path/to/ref> --barcodes 09,10,11 --output <output directory> -profile conda --cpus 6 --mem 12GB
 ```
 
 > to run using Docker instead, swap the `-profile` over to docker
@@ -81,7 +81,7 @@ nextflow run pipelines/long-read-assembly-pipeline.nf --fastqDir </path/to/fastq
 
 ### de novo long read assembly pipeline
 
-![dag](pipelines/long-read-assembly-dn.png)
+![dag](pipelines/long-read-assembly.png)
 
 ## Todo
 

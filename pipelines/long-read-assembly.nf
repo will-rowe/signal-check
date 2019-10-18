@@ -13,6 +13,10 @@ if (params.fast5Dir == '') {
 if (params.barcodes.size() == 0) {
     exit 1, "Please specify the barcodes to use (e.g --barcodes 09,10,11)"
 }
+if (params.refGenomes == '') {
+    exit 1, "Please specify the reference genomes multifasta (use --refGenomes)" 
+}
+
 if (params.assembler == '') {
         exit 1, "Please specify an assembler (use --assembler)'"
 }
@@ -21,9 +25,6 @@ if (params.assembler != 'miniasm' && params.assembler != 'redbean') {
 }
 if (params.output == '') {
     exit 1, "Please specify an output directory for the results (use --output)"
-}
-if (params.refGenome == '') {
-    exit 1, "Please specify a reference genome (use --refGenome)" 
 }
 
 /*
@@ -36,7 +37,7 @@ log.info "-------------------------------------------------------"
 def summary = [:]
 summary['Directory with fastq']        = params.fastqDir
 summary['Directory with fast5']        = params.fast5Dir
-summary['Reference genome'] = params.refGenome
+summary['Reference genomes'] = params.refGenomes
 if (params.label != '') {
     summary['File prepend label'] = params.label
 }
@@ -70,6 +71,13 @@ workflow.onComplete {
     log.info "Execution duration: $workflow.duration"
 }
 
+// error message
+workflow.onError {
+    log.info "-------------------------------------------------------"
+    log.info "Oops... Pipeline execution stopped with the following message:"
+    println "${workflow.errorMessage}"
+}
+
 /*
     do some demuxing and trimming
 */
@@ -79,7 +87,6 @@ process demuxingReads {
 
     input:
        val(fastqDir) from params.fastqDir
-       
 
     output:
 	   file('demuxed_reads/*arcode-*.fastq') into trimmed_reads_for_assembly
@@ -99,9 +106,12 @@ trimmed_reads_for_assembly.into {reads_for_rg_assembly; reads_for_dn_assembly}
 */
 process assemblingReadsRG {
     publishDir params.output + "/reference-guided-assembly", mode: 'copy', pattern: '*.rg-assembly.racon*'
+    errorStrategy 'terminate'
+    echo false
 
     input:
         file(reads) from reads_for_rg_assembly.flatten()
+        file(refGenomes) from params.refGenomes
 
     output:
         file('*.rg-assembly.racon.fasta') into rg_assemblies
@@ -109,12 +119,23 @@ process assemblingReadsRG {
 
     script:
         """
-        mini_assemble -i "${reads}" -r "${params.refGenome}" -t "${task.cpus}" -o pomoxis -p ${reads.getBaseName()}.assembly.racon
+        get-ref.py ${reads} ${params.refGenomes} refGenome.fasta
+
+        mini_assemble -i "${reads}" -r refGenome.fasta -m "${params.raconRounds}" -t "${task.cpus}" -o pomoxis -p ${reads.getBaseName()}.assembly.racon
         mv pomoxis/${reads.getBaseName()}.assembly.racon_final.fa ${reads.getBaseName()}.rg-assembly.racon.fasta
         minimap2 -ax map-ont -t"${task.cpus}" ${reads.getBaseName()}.rg-assembly.racon.fasta "${reads}" | \
         samtools view -bS - | \
         samtools sort - -o ${reads.getBaseName()}.rg-assembly.racon.bam
         samtools index ${reads.getBaseName()}.rg-assembly.racon.bam
+
+        # check that reads map back to assembly
+        mappedReads=\$(samtools view -F 4 -c ${reads.getBaseName()}.rg-assembly.racon.bam)
+        echo \$mappedReads
+        if [ \$mappedReads == 0 ]; then
+            echo "no reads mapped back to the reference guided assembly - wrong reference?"
+            exit 1
+        fi
+
         samtools depth -a ${reads.getBaseName()}.rg-assembly.racon.bam > ${reads.getBaseName()}.rg-assembly.racon.depth        
         plot-bam-depth.py ${reads.getBaseName()}.rg-assembly.racon.depth ${reads.getBaseName()}.rg-assembly.racon
         """
@@ -227,7 +248,7 @@ subsampled_reads.into {reads_for_nanopolish_indexing; reads_for_nanopolish_f1; r
 */
 process nanopolishIndexing {
     input:
-        file(reads) from reads_for_nanopolish_indexing.collect()
+        file(reads) from reads_for_nanopolish_indexing
         val(fast5Dir) from params.fast5Dir
 
     output:

@@ -2,7 +2,7 @@
 pipelineDir=${PWD}"/pipelines"
 fastqDir=${pipelineDir}"/data/ebov-test-data/fastq_pass"
 fast5Dir=${pipelineDir}"/data/ebov-test-data/fast5_pass"
-refGenome=${pipelineDir}"/data/ebov-reference-genomes/NC_002549.fasta"
+refGenome=${pipelineDir}"/data/ebov-test-data/refGenomes.fasta"
 resultsDir=${pipelineDir}"/test-results"
 resultCheck1=${resultsDir}"/de-novo-assembly/testing-barcode-09.dn-assembly.raw.fasta"
 resultCheck2=${resultsDir}"/de-novo-assembly/testing-barcode-09.dn-assembly.racon.medaka.fasta"
@@ -22,7 +22,7 @@ pipeline="nextflow run long-read-assembly.nf \
     --output ${resultsDir} \
     --subSamplingDepth 1 \
     --label testing \
-    --refGenome ${refGenome} \
+    --refGenomes ${refGenome} \
     -resume"
 
 echo "starting assembly pipeline..."
