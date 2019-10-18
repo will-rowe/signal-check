@@ -89,7 +89,7 @@ process demuxingReads {
        val(fastqDir) from params.fastqDir
 
     output:
-	   file('demuxed_reads/*arcode-*.fastq') into trimmed_reads_for_assembly
+	   file('demuxed_reads/*arcode-*.fastq') into trimmed_reads
 
 	script:
         """
@@ -99,7 +99,67 @@ process demuxingReads {
         """
 }
 
-trimmed_reads_for_assembly.into {reads_for_rg_assembly; reads_for_dn_assembly}
+trimmed_reads.into {reads_for_alignment; reads_for_rg_assembly; reads_for_dn_assembly}
+
+/*
+    do an alignment to the specified reference genome
+*/
+process referenceAlignment {
+    publishDir params.output + "/reference-alignment", mode: 'copy', pattern: '*.png'
+    errorStrategy 'terminate'
+    echo false
+
+    input:
+        file(reads) from reads_for_alignment.flatten()
+        file(refGenomes) from params.refGenomes
+
+    output:
+        file('*.bam') into reference_alignments
+        file('*.png') into alignment_pngs
+
+    script:
+        """
+        get-ref.py ${reads} ${params.refGenomes} refGenome.fasta
+        minimap2 -ax map-ont -t "${task.cpus}" refGenome.fasta "${reads}" | \
+        samtools view -bS - | \
+        samtools sort - -o ${reads.getBaseName()}.ref-alignment.bam
+        samtools index ${reads.getBaseName()}.ref-alignment.bam
+
+        # check that reads map back to assembly
+        mappedReads=\$(samtools view -F 4 -c ${reads.getBaseName()}.ref-alignment.bam)
+        echo \$mappedReads
+        if [ \$mappedReads == 0 ]; then
+            echo "no reads mapped to the reference - wrong reference?"
+            exit 1
+        fi
+
+        samtools depth -a ${reads.getBaseName()}.ref-alignment.bam > ${reads.getBaseName()}.ref-alignment.depth        
+        plot-bam-depth.py ${reads.getBaseName()}.ref-alignment.depth ${reads.getBaseName()}.ref-alignment
+        """
+}
+
+
+
+
+
+
+/*
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    VARIANT CALLING:
+    /////////////////////////////////////////////////////////////////////////////////////////////
+*/
+
+
+
+
+
+
+
+/*
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    REFERENCE GUIDED ASSEMBLY:
+    /////////////////////////////////////////////////////////////////////////////////////////////
+*/
 
 /*
     kick of a reference guided assembly
@@ -115,7 +175,7 @@ process assemblingReadsRG {
 
     output:
         file('*.rg-assembly.racon.fasta') into rg_assemblies
-        file('*.png') into pngs
+        file('*.png') into rg_pngs
 
     script:
         """
@@ -123,7 +183,7 @@ process assemblingReadsRG {
 
         mini_assemble -i "${reads}" -r refGenome.fasta -m "${params.raconRounds}" -t "${task.cpus}" -o pomoxis -p ${reads.getBaseName()}.assembly.racon
         mv pomoxis/${reads.getBaseName()}.assembly.racon_final.fa ${reads.getBaseName()}.rg-assembly.racon.fasta
-        minimap2 -ax map-ont -t"${task.cpus}" ${reads.getBaseName()}.rg-assembly.racon.fasta "${reads}" | \
+        minimap2 -ax map-ont -t "${task.cpus}" ${reads.getBaseName()}.rg-assembly.racon.fasta "${reads}" | \
         samtools view -bS - | \
         samtools sort - -o ${reads.getBaseName()}.rg-assembly.racon.bam
         samtools index ${reads.getBaseName()}.rg-assembly.racon.bam
@@ -140,6 +200,12 @@ process assemblingReadsRG {
         plot-bam-depth.py ${reads.getBaseName()}.rg-assembly.racon.depth ${reads.getBaseName()}.rg-assembly.racon
         """
 }
+
+/*
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    DE NOVO ASSEMBLY:
+    /////////////////////////////////////////////////////////////////////////////////////////////
+*/
 
 /*
     do some assemblies with miniasm or redbean
@@ -183,7 +249,7 @@ process correctingAssemblyWithRacon {
 
     output:
 	   file('*.dn-assembly.racon.fasta') into corrected_assembly
-       file(reads) into trimmed_reads
+       file(reads) into trimmed_reads_from_racon
 
 	script:
         """
@@ -212,7 +278,7 @@ process subsamplingReads {
     
     input:
     	file(assembly) from corrected_assembly
-        file(reads) from trimmed_reads
+        file(reads) from trimmed_reads_from_racon
 
     output:
         file(assembly) into subsampled_assembly
@@ -264,7 +330,9 @@ process nanopolishIndexing {
 nanopolish_index_files.into {nanopolish_index_files_f1; nanopolish_index_files_f2}
 
 /*
-    FORK 1:
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    DE NOVO FORK 1:
+    /////////////////////////////////////////////////////////////////////////////////////////////
 */
 
 /*
@@ -316,7 +384,9 @@ process repolishingWithNanopolish {
 }
 
 /*
-    FORK 2:
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    DE NOVO FORK 2:
+    /////////////////////////////////////////////////////////////////////////////////////////////
 */
 
 /*
@@ -369,7 +439,9 @@ process repolishingWithMedaka {
 }
 
 /*
-    REJOIN FORKS:
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    REJOIN DE NOVO FORKS:
+    /////////////////////////////////////////////////////////////////////////////////////////////
 */
 
 /*
@@ -399,7 +471,7 @@ process assessAssemblies {
         do
         echo \$i;
         quast.py -o \${i%%.fasta}.quast -t "${task.cpus}" --circos \$i
-        minimap2 -ax map-ont -t"${task.cpus}" \$i "${reads}" |  samtools view -bS - | samtools sort - -o \${i%%.fasta}.bam && samtools index \${i%%.fasta}.bam && samtools depth -a \${i%%.fasta}.bam > \${i%%.fasta}.depth
+        minimap2 -ax map-ont -t "${task.cpus}" \$i "${reads}" |  samtools view -bS - | samtools sort - -o \${i%%.fasta}.bam && samtools index \${i%%.fasta}.bam && samtools depth -a \${i%%.fasta}.bam > \${i%%.fasta}.depth
         plot-bam-depth.py \${i%%.fasta}.depth \${i%%.fasta}
         done
 
