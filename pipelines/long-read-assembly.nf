@@ -221,11 +221,13 @@ process variantcallWithMedaka {
         file(reference) from reference_for_medaka_variant_calling
 
     output:
-        file('medaka_variant/*.vcf') into medaka_vcfs
+        file('medaka_variant/*.vcf') into medaka_consensus
 
     script:
         """
         medaka_variant -f ${reference} -i ${alignment} -m ${params.medakaModel} -s ${params.medakaModel} -d -t ${task.cpus} -o medaka_variant
+
+        #margin_cons.py ${reference} medaka_variant/round_*_phased.vcf ${alignment} > ${alignment.getBaseName()}.medaka-consensus.fasta
         """
 }
 
@@ -233,14 +235,14 @@ process variantcallWithMedaka {
     variant call with nanopolish
 */
 process variantcallWithNanopolish {
-    publishDir params.output + "/reference-alignment", mode: 'copy', pattern: 'nanopolish_variants.vcf'
+    publishDir params.output + "/reference-alignment", mode: 'copy', pattern: '*.nanopolish-consensus.fasta'
 
     input:
         file(reference) from reference_for_nanopolish_variant_calling
         set file(reads), file(index), file(fai), file(gzi), file(readdb) from nanopolish_index_files_for_variant_calling
 
     output:
-        file('nanopolish_variants.vcf') into nanopolish_vcfs
+        file('*.nanopolish-consensus.fasta') into nanopolish_consensus
 
     script:
         """
@@ -249,6 +251,8 @@ process variantcallWithNanopolish {
         samtools sort - -o ${reads.getBaseName()}.ref-alignment.bam
         samtools index ${reads.getBaseName()}.ref-alignment.bam
         nanopolish variants --reads ${reads} --bam ${reads.getBaseName()}.ref-alignment.bam --genome ${reference} -t ${task.cpus} --ploidy 1 --snps -o nanopolish_variants.vcf
+
+        margin_cons.py ${reference} nanopolish_variants.vcf ${reads.getBaseName()}.ref-alignment.bam > ${reads.getBaseName()}.nanopolish-consensus.fasta
         """
 }
 
