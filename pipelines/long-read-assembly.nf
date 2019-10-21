@@ -214,20 +214,22 @@ nanopolish_index_files.into {nanopolish_index_files_for_dn_assemblies; nanopolis
     variant call with medaka
 */
 process variantcallWithMedaka {
-    publishDir params.output + "/reference-alignment", mode: 'copy', pattern: 'medaka_variant/*.vcf'
+    publishDir params.output + "/reference-alignment", mode: 'copy', pattern: '*.medaka-consensus.fasta'
 
     input:
         file(alignment) from alignments_for_variant_calling
         file(reference) from reference_for_medaka_variant_calling
 
     output:
-        file('medaka_variant/*.vcf') into medaka_consensus
+        file('*.medaka-consensus.fasta') into medaka_consensus
 
     script:
         """
-        medaka_variant -f ${reference} -i ${alignment} -m ${params.medakaModel} -s ${params.medakaModel} -d -t ${task.cpus} -o medaka_variant
-
-        #margin_cons.py ${reference} medaka_variant/round_*_phased.vcf ${alignment} > ${alignment.getBaseName()}.medaka-consensus.fasta
+        medaka_variant -f ${reference} -i ${alignment} -m ${params.medakaModel} -s ${params.medakaModel} -d -t ${task.cpus} -o ${alignment.getBaseName()}
+        mv ${alignment.getBaseName()}/round_1_phased.vcf ${alignment.getBaseName()}.vcf
+        bgzip ${alignment.getBaseName()}.vcf
+        tabix ${alignment.getBaseName()}.vcf.gz
+        bcftools consensus -i '%QUAL>=20' -f ${reference} ${alignment.getBaseName()}.vcf.gz > ${alignment.getBaseName()}.medaka-consensus.fasta
         """
 }
 
@@ -251,8 +253,11 @@ process variantcallWithNanopolish {
         samtools sort - -o ${reads.getBaseName()}.ref-alignment.bam
         samtools index ${reads.getBaseName()}.ref-alignment.bam
         nanopolish variants --reads ${reads} --bam ${reads.getBaseName()}.ref-alignment.bam --genome ${reference} -t ${task.cpus} --ploidy 1 --snps -o nanopolish_variants.vcf
+        bgzip nanopolish_variants.vcf
+        tabix nanopolish_variants.vcf.gz
+        bcftools consensus -i '%QUAL>=20' -f ${reference} nanopolish_variants.vcf.gz > ${reads.getBaseName()}.nanopolish-consensus.fasta
 
-        margin_cons.py ${reference} nanopolish_variants.vcf ${reads.getBaseName()}.ref-alignment.bam > ${reads.getBaseName()}.nanopolish-consensus.fasta
+        #margin_cons.py ${reference} nanopolish_variants.vcf ${reads.getBaseName()}.ref-alignment.bam > ${reads.getBaseName()}.nanopolish-consensus.fasta
         """
 }
 
