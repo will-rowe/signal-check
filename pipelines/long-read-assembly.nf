@@ -261,9 +261,6 @@ process variantcallWithNanopolish {
         """
 }
 
-
-
-
 /*
     /////////////////////////////////////////////////////////////////////////////////////////////
     REFERENCE GUIDED ASSEMBLY:
@@ -489,9 +486,10 @@ process repolishingWithMedakaDN {
 
 /*
     do some assessment of assemblies with quast, map reads back to with minimap2, get depth plots
+    
+    TODO: the assemblies can come in any order in each channel -- needs a way to pull out the reads for each assembly
 */
 process assessAssemblies {
-    echo false
     publishDir params.output + "/de-novo-assembly", mode: 'copy', pattern: 'assembly-qc.tar'
 
     input:
@@ -499,7 +497,6 @@ process assessAssemblies {
         file(assembly2) from dn_assembly_polished_using_signal
         file(assembly3) from dn_assembly_nanopolish_then_medaka
         file(assembly4) from dn_assembly_medaka_then_nanopolish
-        file(reads) from reads_for_quast
 
     output:
         file('assembly-qc.tar') into assembly_assessed
@@ -508,19 +505,13 @@ process assessAssemblies {
         """
         array=("${assembly1}" "${assembly2}" "${assembly3}" "${assembly4}")
 
-        echo "${reads}" "${assembly1}" "${assembly2}" "${assembly3}" "${assembly4}"
-
         for i in \${array[@]};
         do
-        echo \$i;
         quast.py -o \${i%%.fasta}.quast -t "${task.cpus}" --circos \$i
-        minimap2 -ax map-ont -t "${task.cpus}" \$i "${reads}" |  samtools view -bS - | samtools sort - -o \${i%%.fasta}.bam && samtools index \${i%%.fasta}.bam && samtools depth -a \${i%%.fasta}.bam > \${i%%.fasta}.depth
-        plot-bam-depth.py \${i%%.fasta}.depth \${i%%.fasta}
         done
 
         mkdir assembly-qc
         mv *.quast assembly-qc/
-        mv *.png assembly-qc
         tar -cvf assembly-qc.tar assembly-qc
         """
 }
