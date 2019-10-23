@@ -221,7 +221,7 @@ process variantcallWithMedaka {
         file(reference) from reference_for_medaka_variant_calling
 
     output:
-        file('*.medakas.fasta') into medaka_consensus
+        file('*.medaka.fasta') into medaka_consensus
 
     script:
         """
@@ -255,7 +255,7 @@ process variantcallWithNanopolish {
         nanopolish variants --reads ${reads} --bam ${reads.getSimpleName()}.ref-alignment.bam --genome ${reference} -t ${task.cpus} --ploidy 1 --snps -o nanopolish_variants.vcf
         bgzip nanopolish_variants.vcf
         tabix nanopolish_variants.vcf.gz
-        bcftools consensus -i '%QUAL>=20' -f ${reference} nanopolish_variants.vcf.gz > ${reads.getBaseName()}.nanopolish.fasta
+        bcftools consensus -i '%QUAL>=20' -f ${reference} nanopolish_variants.vcf.gz > ${reads.getSimpleName()}.ref-alignment.nanopolish.fasta
         """
 }
 
