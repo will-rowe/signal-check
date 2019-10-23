@@ -214,14 +214,14 @@ nanopolish_index_files.into {nanopolish_index_files_for_dn_assemblies; nanopolis
     variant call with medaka
 */
 process variantcallWithMedaka {
-    publishDir params.output + "/reference-alignment", mode: 'copy', pattern: '*.medaka-consensus.fasta'
+    publishDir params.output + "/reference-alignment", mode: 'copy', pattern: '*.medaka.fasta'
 
     input:
         file(alignment) from alignments_for_variant_calling
         file(reference) from reference_for_medaka_variant_calling
 
     output:
-        file('*.medaka-consensus.fasta') into medaka_consensus
+        file('*.medakas.fasta') into medaka_consensus
 
     script:
         """
@@ -229,7 +229,7 @@ process variantcallWithMedaka {
         mv ${alignment.getBaseName()}/round_1_phased.vcf ${alignment.getBaseName()}.vcf
         bgzip ${alignment.getBaseName()}.vcf
         tabix ${alignment.getBaseName()}.vcf.gz
-        bcftools consensus -i '%QUAL>=20' -f ${reference} ${alignment.getBaseName()}.vcf.gz > ${alignment.getBaseName()}.medaka-consensus.fasta
+        bcftools consensus -i '%QUAL>=20' -f ${reference} ${alignment.getBaseName()}.vcf.gz > ${alignment.getBaseName()}.medaka.fasta
         """
 }
 
@@ -237,27 +237,25 @@ process variantcallWithMedaka {
     variant call with nanopolish
 */
 process variantcallWithNanopolish {
-    publishDir params.output + "/reference-alignment", mode: 'copy', pattern: '*.nanopolish-consensus.fasta'
+    publishDir params.output + "/reference-alignment", mode: 'copy', pattern: '*.nanopolish.fasta'
 
     input:
         file(reference) from reference_for_nanopolish_variant_calling
         set file(reads), file(index), file(fai), file(gzi), file(readdb) from nanopolish_index_files_for_variant_calling
 
     output:
-        file('*.nanopolish-consensus.fasta') into nanopolish_consensus
+        file('*.nanopolish.fasta') into nanopolish_consensus
 
     script:
         """
         minimap2 -ax map-ont -t ${task.cpus} ${reference} ${reads} | \
         samtools view -bS - | \
-        samtools sort - -o ${reads.getBaseName()}.ref-alignment.bam
-        samtools index ${reads.getBaseName()}.ref-alignment.bam
-        nanopolish variants --reads ${reads} --bam ${reads.getBaseName()}.ref-alignment.bam --genome ${reference} -t ${task.cpus} --ploidy 1 --snps -o nanopolish_variants.vcf
+        samtools sort - -o ${reads.getSimpleName()}.ref-alignment.bam
+        samtools index ${reads.getSimpleName()}.ref-alignment.bam
+        nanopolish variants --reads ${reads} --bam ${reads.getSimpleName()}.ref-alignment.bam --genome ${reference} -t ${task.cpus} --ploidy 1 --snps -o nanopolish_variants.vcf
         bgzip nanopolish_variants.vcf
         tabix nanopolish_variants.vcf.gz
-        bcftools consensus -i '%QUAL>=20' -f ${reference} nanopolish_variants.vcf.gz > ${reads.getBaseName()}.nanopolish-consensus.fasta
-
-        #margin_cons.py ${reference} nanopolish_variants.vcf ${reads.getBaseName()}.ref-alignment.bam > ${reads.getBaseName()}.nanopolish-consensus.fasta
+        bcftools consensus -i '%QUAL>=20' -f ${reference} nanopolish_variants.vcf.gz > ${reads.getBaseName()}.nanopolish.fasta
         """
 }
 
@@ -317,14 +315,13 @@ process assemblingReadsRG {
     do some assemblies with miniasm or redbean
 */
 process assemblingReadsDN {
-    publishDir params.output + "/de-novo-assembly", mode: 'copy', pattern: '*.dn-assembly.raw.fasta'
     echo false
 
     input:
         file(reads) from reads_for_dn_assembly.flatten()
 
     output:
-        file('*.dn-assembly.raw.fasta') into dn_assembly_for_correction
+        file('*.dn-assembly.fasta') into dn_assembly_for_correction
         file(reads) into trimmed_reads_for_correction
 
     script:
@@ -334,14 +331,14 @@ process assemblingReadsDN {
             minimap2 -x ava-ont -F 200 -t "${task.cpus}" "${reads}" "${reads}" > "${reads.getBaseName()}.paf"
             miniasm -e2 -n1 -s 500 -R -f "${reads}" "${reads.getBaseName()}.paf" > "${reads.getBaseName()}.gfa"
             awk '/^S/{print ">"\$2"\\n"\$3}' "${reads.getBaseName()}.gfa" | fold > assembly.fasta
-            awk '/^>/{print ">assembly.raw.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".dn-assembly.raw.fasta
+            awk '/^>/{print ">assembly.raw.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".dn-assembly.fasta
             """
         else if(params.assembler == 'redbean')
             """
             echo "[info] using readbean for assembly of "${reads}""
             wtdbg2 -x ont -g 20Kb -i "${reads}" -t "${task.cpus}" -fo "${reads.getBaseName()}"
             wtpoa-cns -t "${task.cpus}" -i "${reads.getBaseName()}".ctg.lay.gz -fo assembly.fasta
-            awk '/^>/{print ">assembly.raw.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".dn-assembly.raw.fasta
+            awk '/^>/{print ">assembly.raw.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".dn-assembly.fasta
             """
 }
 
@@ -349,6 +346,7 @@ process assemblingReadsDN {
     do some assembly correction with x rounds of racon
 */
 process correctingAssemblyWithRaconDN {
+    publishDir params.output + "/de-novo-assembly", mode: 'copy', pattern: '*.dn-assembly.racon.fasta'
     input:
         file(assembly) from dn_assembly_for_correction
     	file(reads) from trimmed_reads_for_correction
