@@ -286,7 +286,8 @@ process assemblingReadsRG {
         get-ref.py ${reads} ${params.refGenomes} refGenome.fasta
 
         mini_assemble -i "${reads}" -r refGenome.fasta -m "${params.raconRounds}" -t "${task.cpus}" -o pomoxis -p ${reads.getBaseName()}.assembly.racon
-        mv pomoxis/${reads.getBaseName()}.assembly.racon_final.fa ${reads.getBaseName()}.rg-assembly.racon.fasta
+        awk '/^>/{print ">rg|racon|contig" ++i; next}{print}' < pomoxis/${reads.getBaseName()}.assembly.racon_final.fa > ${reads.getBaseName()}.rg-assembly.racon.fasta
+
         minimap2 -ax map-ont -t "${task.cpus}" ${reads.getBaseName()}.rg-assembly.racon.fasta "${reads}" | \
         samtools view -bS - | \
         samtools sort - -o ${reads.getBaseName()}.rg-assembly.racon.bam
@@ -330,15 +331,13 @@ process assemblingReadsDN {
             echo "[info] using miniasm for assembly of "${reads}""
             minimap2 -x ava-ont -F 200 -t "${task.cpus}" "${reads}" "${reads}" > "${reads.getBaseName()}.paf"
             miniasm -e2 -n1 -s 500 -R -f "${reads}" "${reads.getBaseName()}.paf" > "${reads.getBaseName()}.gfa"
-            awk '/^S/{print ">"\$2"\\n"\$3}' "${reads.getBaseName()}.gfa" | fold > assembly.fasta
-            awk '/^>/{print ">assembly.raw.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".dn-assembly.fasta
+            awk '/^S/{print ">"\$2"\\n"\$3}' "${reads.getBaseName()}.gfa" | fold > "${reads.getBaseName()}".dn-assembly.fasta
             """
         else if(params.assembler == 'redbean')
             """
             echo "[info] using readbean for assembly of "${reads}""
             wtdbg2 -x ont -g 20Kb -i "${reads}" -t "${task.cpus}" -fo "${reads.getBaseName()}"
-            wtpoa-cns -t "${task.cpus}" -i "${reads.getBaseName()}".ctg.lay.gz -fo assembly.fasta
-            awk '/^>/{print ">assembly.raw.contig" ++i; next}{print}' < assembly.fasta > "${reads.getBaseName()}".dn-assembly.fasta
+            wtpoa-cns -t "${task.cpus}" -i "${reads.getBaseName()}".ctg.lay.gz -fo "${reads.getBaseName()}".dn-assembly.fasta
             """
 }
 
@@ -369,7 +368,7 @@ process correctingAssemblyWithRaconDN {
             rm ${reads.getBaseName()}-racon\$i.fasta
         done
 
-        mv ${reads.getBaseName()}-racon*.fasta ${reads.getBaseName()}.dn-assembly.racon.fasta
+        awk '/^>/{print ">dn|racon|contig" ++i; next}{print}' < ${reads.getBaseName()}-racon*.fasta  > ${reads.getBaseName()}.dn-assembly.racon.fasta
         """
 }
 
@@ -395,7 +394,7 @@ process polishingWithMedakaDN {
 	script:
         """
         medaka_consensus -i "${reads}" -d "${assembly}" -o medaka -m "${params.medakaModel}" -t "${task.cpus}"
-        awk '/^>/{print ">medaka.contig" ++i; next}{print}' < medaka/consensus.fasta > ${assembly.getSimpleName()}.dn-assembly.racon.medaka.fasta
+        awk '/^>/{print ">dn|racon.medaka|contig" ++i; next}{print}' < medaka/consensus.fasta > ${assembly.getSimpleName()}.dn-assembly.racon.medaka.fasta
         """
 }
 
@@ -420,7 +419,7 @@ process repolishingWithNanopolishDN {
         samtools index ${reads.getBaseName()}.assembly-alignment.bam
         nanopolish_makerange.py "${assembly}" | parallel --results nanopolish.results -P "${task.cpus}" nanopolish variants --consensus -o polished.{1}.vcf -w {1} -r "${reads}" -b ${reads.getBaseName()}.assembly-alignment.bam -g "${assembly}" -t 4 --min-candidate-frequency 0.1
         nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.*.vcf > assembly.fasta;
-        awk '/^>/{print ">medaka.nanopolish.contig" ++i; next}{print}' < assembly.fasta > "${assembly.getSimpleName()}".dn-assembly.racon.medaka.nanopolish.fasta
+        awk '/^>/{print ">dn|racon.medaka.nanopolish|contig" ++i; next}{print}' < assembly.fasta > "${assembly.getSimpleName()}".dn-assembly.racon.medaka.nanopolish.fasta
         """
 }
 
@@ -450,7 +449,7 @@ process polishingWithNanopolishDN {
 
         nanopolish_makerange.py "${assembly}" | parallel --results nanopolish.results -P "${task.cpus}" nanopolish variants --consensus -o polished.{1}.vcf -w {1} -r "${reads}" -b ${reads.getBaseName()}.assembly-alignment.bam -g "${assembly}" -t 4 --min-candidate-frequency 0.1
         nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.*.vcf > assembly.fasta;
-        awk '/^>/{print ">nanopolish.contig" ++i; next}{print}' < assembly.fasta > "${assembly.getSimpleName()}".dn-assembly.racon.nanopolish.fasta
+        awk '/^>/{print ">dn|racon.nanopolish|contig" ++i; next}{print}' < assembly.fasta > "${assembly.getSimpleName()}".dn-assembly.racon.nanopolish.fasta
         """
 }
 
@@ -472,7 +471,7 @@ process repolishingWithMedakaDN {
 	script:
         """
         medaka_consensus -i "${reads}" -d "${assembly}" -o medaka -m "${params.medakaModel}" -t "${task.cpus}"
-        awk '/^>/{print ">nanopolish.medaka.contig" ++i; next}{print}' < medaka/consensus.fasta > ${assembly.getSimpleName()}.dn-assembly.racon.nanopolish.medaka.fasta
+        awk '/^>/{print ">dn|racon.nanopolish.medaka|contig" ++i; next}{print}' < medaka/consensus.fasta > ${assembly.getSimpleName()}.dn-assembly.racon.nanopolish.medaka.fasta
         """
 }
 
