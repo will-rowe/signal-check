@@ -214,22 +214,25 @@ nanopolish_index_files.into {nanopolish_index_files_for_dn_assemblies; nanopolis
     variant call with medaka
 */
 process variantcallWithMedaka {
-    publishDir params.output + "/reference-alignment", mode: 'copy', pattern: '*.medaka.fasta'
+    publishDir params.output + "/reference-alignment", mode: 'copy', pattern: 'medaka-consensus/*'
 
     input:
         file(alignment) from alignments_for_variant_calling
         file(reference) from reference_for_medaka_variant_calling
 
     output:
-        file('*.medaka.fasta') into medaka_consensus
+        file('medaka-consensus/*.medaka.fasta') into medaka_consensus
+        file('medaka-consensus/*.medaka_variants.vcf.gz') into medaka_variants
 
     script:
         """
         medaka_variant -f ${reference} -i ${alignment} -m ${params.medakaModel} -s ${params.medakaModel} -d -t ${task.cpus} -o ${alignment.getBaseName()}
-        mv ${alignment.getBaseName()}/round_1_phased.vcf ${alignment.getBaseName()}.vcf
-        bgzip ${alignment.getBaseName()}.vcf
-        tabix ${alignment.getBaseName()}.vcf.gz
-        bcftools consensus -i '%QUAL>=20' -f ${reference} ${alignment.getBaseName()}.vcf.gz > ${alignment.getBaseName()}.medaka.fasta
+        mv ${alignment.getBaseName()}/round_1_phased.vcf ${alignment.getBaseName()}.medaka_variants.vcf
+        bgzip ${alignment.getBaseName()}.medaka_variants.vcf
+        tabix ${alignment.getBaseName()}.medaka_variants.vcf.gz
+        bcftools consensus -i '%QUAL>=20' -f ${reference} ${alignment.getBaseName()}.medaka_variants.vcf.gz > ${alignment.getBaseName()}.medaka.fasta
+        mkdir medaka-consensus
+        mv *.medaka_variants.vcf.gz *.medaka.fasta medaka-consensus
         """
 }
 
@@ -237,14 +240,15 @@ process variantcallWithMedaka {
     variant call with nanopolish
 */
 process variantcallWithNanopolish {
-    publishDir params.output + "/reference-alignment", mode: 'copy', pattern: '*.nanopolish.fasta'
+    publishDir params.output + "/reference-alignment", mode: 'copy', pattern: 'nanopolish-consensus/*'
 
     input:
         file(reference) from reference_for_nanopolish_variant_calling
         set file(reads), file(index), file(fai), file(gzi), file(readdb) from nanopolish_index_files_for_variant_calling
 
     output:
-        file('*.nanopolish.fasta') into nanopolish_consensus
+        file('nanopolish-consensus/*.nanopolish.fasta') into nanopolish_consensus
+        file('nanopolish-consensus/*.nanopolish_variants.vcf.gz') into nanopolish_variants
 
     script:
         """
@@ -252,10 +256,12 @@ process variantcallWithNanopolish {
         samtools view -bS - | \
         samtools sort - -o ${reads.getSimpleName()}.ref-alignment.bam
         samtools index ${reads.getSimpleName()}.ref-alignment.bam
-        nanopolish variants --reads ${reads} --bam ${reads.getSimpleName()}.ref-alignment.bam --genome ${reference} -t ${task.cpus} --ploidy 1 --snps -o nanopolish_variants.vcf
-        bgzip nanopolish_variants.vcf
-        tabix nanopolish_variants.vcf.gz
-        bcftools consensus -i '%QUAL>=20' -f ${reference} nanopolish_variants.vcf.gz > ${reads.getSimpleName()}.ref-alignment.nanopolish.fasta
+        nanopolish variants --reads ${reads} --bam ${reads.getSimpleName()}.ref-alignment.bam --genome ${reference} -t ${task.cpus} --ploidy 1 --snps -o ${reads.getSimpleName()}.nanopolish_variants.vcf
+        bgzip ${reads.getSimpleName()}.nanopolish_variants.vcf
+        tabix ${reads.getSimpleName()}.nanopolish_variants.vcf.gz
+        bcftools consensus -i '%QUAL>=20' -f ${reference} ${reads.getSimpleName()}.nanopolish_variants.vcf.gz > ${reads.getSimpleName()}.ref-alignment.nanopolish.fasta
+        mkdir nanopolish-consensus
+        mv *.nanopolish_variants.vcf.gz *.nanopolish.fasta nanopolish-consensus
         """
 }
 
@@ -406,6 +412,7 @@ nanopolish_index_files_for_dn_assemblies.into{nif_dn_repolishing; nif_dn_polishi
 */
 process repolishingWithNanopolishDN {
 	publishDir params.output + "/de-novo-assembly", mode: 'copy', pattern: '*.dn-assembly.racon.medaka.nanopolish.fasta'
+    
     input:
         file(assembly) from medaka_polished_dn_assembly_for_repolishing
         set file(reads), file(index), file(fai), file(gzi), file(readdb) from nif_dn_repolishing

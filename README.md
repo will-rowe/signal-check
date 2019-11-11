@@ -92,8 +92,9 @@ nextflow run pipelines/long-read-assembly-pipeline.nf --fastqDir </path/to/fastq
 ## Todo
 
 * add in help message and full param descript
+  *  add in pre-run checks for reads, ref genome etc.
+  *  no check for existence, access etc.
 * get more info from the qcat process (using the parsing script)
-* add in pre-run checks for reads, ref genome etc.
 * add pycoqc
 * Redbean assemblies aren't great, I need to try parameterising this better
 
