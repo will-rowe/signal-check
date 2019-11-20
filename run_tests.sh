@@ -14,8 +14,8 @@ cd ${pipelineDir}
 pipeline="nextflow run long-read-assembly.nf \
     -profile docker \
     -with-dag flow.png \
-    --cpus 8 \
-    --mem 12GB \
+    --cpus 2 \
+    --mem 4GB \
     --fastqDir ${fastqDir} \
     --fast5Dir ${fast5Dir} \
     --barcode 9 \
