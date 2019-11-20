@@ -6,7 +6,7 @@ barcodes: the list of barcodes to keep
 label: prepends a label to the output filenames
 
 this script will remove all barcodes we don't want from the qcat output
-it will also remain those we do want
+it will also rename those we do want
 """
 
 import argparse
@@ -25,9 +25,12 @@ for fname in listdir(args.inputDir):
         base = fname.split(".")[0]
         if "barcode" in base:
             bc = base.replace("barcode", "")
+            # remove the leading 0 for barcodes < 10
+            if bc[0] == "0":
+                bc = bc.replace("0", "")
             if bc in args.barcodes:
                 # for now just rename to barcode
-                # TODO: use a lookup table to add in a meaningful name here
+                # TODO: use a lookup table to add in a meaningful name here (e.g. sample name)
                 if (args.label != ""):
                     rename(args.inputDir + "/" + fname, args.inputDir + "/" + args.label + "-barcode-" + bc + ".fastq")
                 else:

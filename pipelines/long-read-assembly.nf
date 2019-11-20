@@ -10,11 +10,11 @@ if (params.fastqDir == '') {
 if (params.fast5Dir == '') {
     exit 1, "Please specify the directory containing the fast5 data - this is usually the fast5_pass directory in the MinKNOW output (use --fast5Dir)"
 }
-if (params.barcodes.size() == 0) {
-    exit 1, "Please specify the barcodes to use (e.g --barcodes 09,10,11)"
+if (params.barcode == '') {
+    exit 1, "Please specify the barcode to use (e.g --barcode 09)"
 }
-if (params.refGenomes == '') {
-    exit 1, "Please specify the reference genomes multifasta (use --refGenomes)" 
+if (params.refGenome == '') {
+    exit 1, "Please specify a reference genome fasta (use --refGenome)" 
 }
 
 if (params.assembler == '') {
@@ -33,33 +33,31 @@ if (params.output == '') {
 log.info "-------------------------------------------------------"
 log.info "long read assembly pipeline v${pipelineVersion}"
 log.info "-------------------------------------------------------"
-
 def summary = [:]
 summary['Directory with fastq']        = params.fastqDir
 summary['Directory with fast5']        = params.fast5Dir
-summary['Reference genomes'] = params.refGenomes
+summary['Reference genome']            = params.refGenome
 if (params.label != '') {
     summary['File prepend label'] = params.label
 }
-summary['Barcodes'] = params.barcodes
-summary['Sequencing kit'] = params.seqKit
+summary['Barcode']                     = params.barcode
+summary['Sequencing kit']              = params.seqKit
 if (params.subSamplingDepth != 0) {
     summary['Sampling depth'] = params.subSamplingDepth
 } else {
     summary['Sampling depth'] = "na"
 }
-summary['Racon iterat.'] = params.raconRounds
-summary['Medaka model'] = params.medakaModel
-summary['Output dir']   = params.output
-summary['Working dir']  = workflow.workDir
-summary['Max. memory']   = params.mem
-summary['Max. CPUs']     = params.cpus
-summary['Profile'] = workflow.profile
-summary['Current home']   = "$HOME"
-summary['Current user']   = "$USER"
-summary['Current path']   = "$PWD"
-summary['Script dir']     = workflow.projectDir
-
+summary['Racon iterat.']               = params.raconRounds
+summary['Medaka model']                = params.medakaModel
+summary['Output dir']                  = params.output
+summary['Working dir']                 = workflow.workDir
+summary['Max. memory']                 = params.mem
+summary['Max. CPUs']                   = params.cpus
+summary['Profile']                     = workflow.profile
+summary['Current home']                = "$HOME"
+summary['Current user']                = "$USER"
+summary['Current path']                = "$PWD"
+summary['Script dir']                  = workflow.projectDir
 log.info summary.collect { k,v -> "${k.padRight(15)}: $v" }.join("\n")
 log.info "-------------------------------------------------------"
 
@@ -77,6 +75,9 @@ workflow.onError {
     log.info "Oops... Pipeline execution stopped with the following message:"
     println "${workflow.errorMessage}"
 }
+
+// grab the reference genome
+refGenome = file(params.refGenome)
 
 /*
     /////////////////////////////////////////////////////////////////////////////////////////////
@@ -99,9 +100,9 @@ process demuxingReads {
 
 	script:
         """
-        echo "[info] demuxing reads, trimming and keeping barcodes "${params.barcodes}""
-        cat "${fastqDir}"/*.fastq | qcat --threads "${task.cpus}" --guppy --trim --kit "${params.seqKit}" --min-score "${params.minQualScore}" -b demuxed_reads
-        qcat-parser.py demuxed_reads "${params.barcodes}" "${params.label}"
+        echo "[info] demuxing reads, trimming and keeping barcode "${params.barcode}""
+        cat ${fastqDir}/*.fastq | qcat --threads ${task.cpus} --guppy --trim --kit ${params.seqKit} --min-score ${params.minQualScore} -b demuxed_reads
+        qcat-parser.py demuxed_reads ${params.barcode} ${params.label}
         """
 }
 
@@ -116,19 +117,17 @@ process referenceAlignment {
     echo false
 
     input:
-        file(reads) from reads_for_alignment.flatten()
-        file(refGenomes) from params.refGenomes
+        file(reads) from reads_for_alignment
+        file(refGenome) from refGenome
 
     output:
         file('*.ref-alignment.bam') into reference_alignments
-        file('refGenome.fasta') into reference_sequence
         file(reads) into reads_for_subsampling
         file('*.png') into alignment_pngs
 
     script:
         """
-        get-ref.py ${reads} ${params.refGenomes} refGenome.fasta
-        minimap2 -ax map-ont -t "${task.cpus}" refGenome.fasta "${reads}" | \
+        minimap2 -ax map-ont -t ${task.cpus} ${refGenome} ${reads} | \
         samtools view -bS - | \
         samtools sort - -o ${reads.getBaseName()}.ref-alignment.bam
         samtools index ${reads.getBaseName()}.ref-alignment.bam
@@ -147,7 +146,6 @@ process referenceAlignment {
 }
 
 reference_alignments.into{alignments_for_subsampling; alignments_for_variant_calling}
-reference_sequence.into{reference_for_medaka_variant_calling; reference_for_nanopolish_variant_calling}
 
 /*
     do some read subsampling if requested
@@ -218,18 +216,18 @@ process variantcallWithMedaka {
 
     input:
         file(alignment) from alignments_for_variant_calling
-        file(reference) from reference_for_medaka_variant_calling
+        file(refGenome) from refGenome
 
     output:
         file('*.medaka.fasta') into medaka_consensus
 
     script:
         """
-        medaka_variant -f ${reference} -i ${alignment} -m ${params.medakaModel} -s ${params.medakaModel} -d -t ${task.cpus} -o ${alignment.getBaseName()}
+        medaka_variant -f ${refGenome} -i ${alignment} -m ${params.medakaModel} -s ${params.medakaModel} -d -t ${task.cpus} -o ${alignment.getBaseName()}
         mv ${alignment.getBaseName()}/round_1_phased.vcf ${alignment.getBaseName()}.vcf
         bgzip ${alignment.getBaseName()}.vcf
         tabix ${alignment.getBaseName()}.vcf.gz
-        bcftools consensus -i '%QUAL>=20' -f ${reference} ${alignment.getBaseName()}.vcf.gz > ${alignment.getBaseName()}.medaka.fasta
+        bcftools consensus -i '%QUAL>=20' -f ${refGenome} ${alignment.getBaseName()}.vcf.gz > ${alignment.getBaseName()}.medaka.fasta
         """
 }
 
@@ -240,22 +238,22 @@ process variantcallWithNanopolish {
     publishDir params.output + "/reference-alignment", mode: 'copy', pattern: '*.nanopolish.fasta'
 
     input:
-        file(reference) from reference_for_nanopolish_variant_calling
         set file(reads), file(index), file(fai), file(gzi), file(readdb) from nanopolish_index_files_for_variant_calling
+        file(refGenome) from refGenome
 
     output:
         file('*.nanopolish.fasta') into nanopolish_consensus
 
     script:
         """
-        minimap2 -ax map-ont -t ${task.cpus} ${reference} ${reads} | \
+        minimap2 -ax map-ont -t ${task.cpus} ${refGenome} ${reads} | \
         samtools view -bS - | \
         samtools sort - -o ${reads.getSimpleName()}.ref-alignment.bam
         samtools index ${reads.getSimpleName()}.ref-alignment.bam
-        nanopolish variants --reads ${reads} --bam ${reads.getSimpleName()}.ref-alignment.bam --genome ${reference} -t ${task.cpus} --ploidy 1 --snps -o nanopolish_variants.vcf
+        nanopolish variants --reads ${reads} --bam ${reads.getSimpleName()}.ref-alignment.bam --genome ${refGenome} -t ${task.cpus} --ploidy 1 --snps -o nanopolish_variants.vcf
         bgzip nanopolish_variants.vcf
         tabix nanopolish_variants.vcf.gz
-        bcftools consensus -i '%QUAL>=20' -f ${reference} nanopolish_variants.vcf.gz > ${reads.getSimpleName()}.ref-alignment.nanopolish.fasta
+        bcftools consensus -i '%QUAL>=20' -f ${refGenome} nanopolish_variants.vcf.gz > ${reads.getSimpleName()}.ref-alignment.nanopolish.fasta
         """
 }
 
@@ -274,8 +272,8 @@ process assemblingReadsRG {
     echo false
 
     input:
-        file(reads) from reads_for_rg_assembly.flatten()
-        file(refGenomes) from params.refGenomes
+        file(reads) from reads_for_rg_assembly
+        file(refGenome) from refGenome
 
     output:
         file('*.rg-assembly.racon.fasta') into rg_assemblies
@@ -283,12 +281,10 @@ process assemblingReadsRG {
 
     script:
         """
-        get-ref.py ${reads} ${params.refGenomes} refGenome.fasta
-
-        mini_assemble -i "${reads}" -r refGenome.fasta -m "${params.raconRounds}" -t "${task.cpus}" -o pomoxis -p ${reads.getBaseName()}.assembly.racon
+        mini_assemble -i ${reads} -r ${refGenome} -m ${params.raconRounds} -t ${task.cpus} -o pomoxis -p ${reads.getBaseName()}.assembly.racon
         awk '/^>/{print ">rg|racon|contig" ++i; next}{print}' < pomoxis/${reads.getBaseName()}.assembly.racon_final.fa > ${reads.getBaseName()}.rg-assembly.racon.fasta
 
-        minimap2 -ax map-ont -t "${task.cpus}" ${reads.getBaseName()}.rg-assembly.racon.fasta "${reads}" | \
+        minimap2 -ax map-ont -t ${task.cpus} ${reads.getBaseName()}.rg-assembly.racon.fasta ${reads} | \
         samtools view -bS - | \
         samtools sort - -o ${reads.getBaseName()}.rg-assembly.racon.bam
         samtools index ${reads.getBaseName()}.rg-assembly.racon.bam
@@ -319,7 +315,7 @@ process assemblingReadsDN {
     echo false
 
     input:
-        file(reads) from reads_for_dn_assembly.flatten()
+        file(reads) from reads_for_dn_assembly
 
     output:
         file('*.dn-assembly.fasta') into dn_assembly_for_correction
