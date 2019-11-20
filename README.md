@@ -12,7 +12,7 @@
 
 This is a long read assembly pipeline and set of workbooks for checking the usefulness of signal-data (for viral metagenomics); helping to decide if/where to keep it.
 
-### pipeline
+### Pipeline
 
 There is one nextflow pipeline for both reference-guided and de-novo long read genome assembly, as well as a variant call-> consensus approach.
 
@@ -36,7 +36,7 @@ There is one nextflow pipeline for both reference-guided and de-novo long read g
   * quast
   * depth plots
 
-### workbooks
+### Workbooks
 
 [1.data-wrangling-and-assembly-pipeline](1.data-wrangling-and-assembly-pipeline.ipynb)
 
@@ -52,7 +52,7 @@ There is one nextflow pipeline for both reference-guided and de-novo long read g
 * visualise alignments
 
 
-### data
+### Data
 
 We use data from the latest [artic data release](http://artic.network/protocol_validation_2019.html). In particular, the Ebola virus (EBOV) minion run that sequenced 3 strains of the virus (Mayinga, Kikwit, Makona) using the metagenomic protocol and rapid PCR kit.
 
@@ -91,14 +91,23 @@ nextflow run pipelines/long-read-assembly-pipeline.nf --fastqDir </path/to/fastq
 
 ## Todo
 
+### pipeline todos
 * add in help message and full param descript
-* get more info from the qcat process (using the parsing script)
 * add in pre-run checks for reads, ref genome etc.
-* add pycoqc
 * Redbean assemblies aren't great, I need to try parameterising this better
+* add in subsampling variations for pomoxis
+* add in some qcat parameters (e.g. read length, Q score), and summarise qcat output
+* output all intermediatery files via debug flag
 
+### analysis todos
+* run Nipah data from ARTIC release
+* run the synthetic genome
+* try with amplocon data - may not assemble
+  * try using the align trim script of Nick's (which soft masks the bam)
+  * add in checks for run-through chimeras (check double barcodes)
+* colour snps in MSA viewer
+* filter coverage for nucfdiff - e.g. only check differences in areas where coverage > 50x
 
 ## Notes
 
-* medaka renames the contigs to include range data, which then breaks Nanopolish - so contigs are renamed sequentially after medaka
- - actually, all contigs are now renamed according to polishing tool used - this makes downstream processing easier
+* medaka renames the contigs to include range data, which then breaks Nanopolish - so all contigs are renamed sequentially and according to polishing tool used; making downstream processing easier
