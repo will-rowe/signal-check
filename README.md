@@ -111,3 +111,29 @@ nextflow run pipelines/long-read-assembly-pipeline.nf --fastqDir </path/to/fastq
 ## Notes
 
 * medaka renames the contigs to include range data, which then breaks Nanopolish - so all contigs are renamed sequentially and according to polishing tool used; making downstream processing easier
+
+
+## Nanopolish
+
+In the Mayinga data, it looks as though Nanopolish is preferring 2 minor alleles over the alleles called by medaka.
+
+This is the case for both high accuracy and fast bascalled data.
+
+The nextflow pipeline processes which produce the result in question are: `polishingWithNanopolishDN` and `repolishingWithNanopolishDN`. The output of these processes has been kept in the repo:
+
+> pipelines/data/pipeline-results/mayinga/r941_min_fast/debug
+
+
+The commands used during `polishingWithNanopolishDN`:
+
+```
+minimap2 -ax map-ont -t ${task.cpus} ${assembly} ${reads} | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
+
+samtools index ${reads.getBaseName()}.assembly-alignment.bam
+
+nanopolish_makerange.py ${assembly} | parallel --results nanopolish.results -P ${task.cpus} nanopolish variants --consensus -o polished.{1}.vcf -w {1} -r ${reads} -b ${reads.getBaseName()}.assembly-alignment.bam -g "${assembly}" -t 4 --min-candidate-frequency 0.1
+
+nanopolish vcf2fasta --skip-checks -g ${assembly} polished.*.vcf > assembly.fasta
+
+awk '/^>/{print ">dn|racon.nanopolish|contig" ++i; next}{print}' < assembly.fasta > ${assembly.getSimpleName()}.dn-assembly.racon.nanopolish.fasta
+```

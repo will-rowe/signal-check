@@ -58,6 +58,7 @@ summary['Current home']                = "$HOME"
 summary['Current user']                = "$USER"
 summary['Current path']                = "$PWD"
 summary['Script dir']                  = workflow.projectDir
+summary['Debug']                       = params.debug
 log.info summary.collect { k,v -> "${k.padRight(15)}: $v" }.join("\n")
 log.info "-------------------------------------------------------"
 
@@ -189,7 +190,7 @@ process nanopolishIndexing {
 
     script:
         """
-        nanopolish index -d "${fast5Dir}" "${reads}"
+        nanopolish index -d ${fast5Dir} ${reads}
         """
 }
 
@@ -352,15 +353,15 @@ process correctingAssemblyWithRaconDN {
 
 	script:
         """
-        minimap2 -x map-ont -t "${task.cpus}" "${assembly}" "${reads}" > ${reads.getBaseName()}-racon1.paf
-        racon -t "${task.cpus}" "${reads}" ${reads.getBaseName()}-racon1.paf "${assembly}" > ${reads.getBaseName()}-racon1.fasta
+        minimap2 -x map-ont -t ${task.cpus} ${assembly} ${reads} > ${reads.getBaseName()}-racon1.paf
+        racon -t ${task.cpus} ${reads} ${reads.getBaseName()}-racon1.paf ${assembly} > ${reads.getBaseName()}-racon1.fasta
 
         remainingRounds="\$((${params.raconRounds}-1))"
         for (( i=1; i<=\$remainingRounds; i++ ))
         do
             ii=\$(( \$i + 1 ))
-            minimap2 -x map-ont -t "${task.cpus}" ${reads.getBaseName()}-racon\$i.fasta "${reads}" > ${reads.getBaseName()}-racon\$ii.paf
-            racon -t "${task.cpus}" "${reads}" ${reads.getBaseName()}-racon\$ii.paf ${reads.getBaseName()}-racon\$i.fasta > ${reads.getBaseName()}-racon\$ii.fasta
+            minimap2 -x map-ont -t ${task.cpus} ${reads.getBaseName()}-racon\$i.fasta ${reads} > ${reads.getBaseName()}-racon\$ii.paf
+            racon -t ${task.cpus} ${reads} ${reads.getBaseName()}-racon\$ii.paf ${reads.getBaseName()}-racon\$i.fasta > ${reads.getBaseName()}-racon\$ii.fasta
             rm ${reads.getBaseName()}-racon\$i.fasta
         done
 
@@ -389,7 +390,7 @@ process polishingWithMedakaDN {
 
 	script:
         """
-        medaka_consensus -i "${reads}" -d "${assembly}" -o medaka -m "${params.medakaModel}" -t "${task.cpus}"
+        medaka_consensus -i ${reads} -d ${assembly} -o medaka -m ${params.medakaModel} -t ${task.cpus}
         awk '/^>/{print ">dn|racon.medaka|contig" ++i; next}{print}' < medaka/consensus.fasta > ${assembly.getSimpleName()}.dn-assembly.racon.medaka.fasta
         """
 }
@@ -402,20 +403,30 @@ nanopolish_index_files_for_dn_assemblies.into{nif_dn_repolishing; nif_dn_polishi
 */
 process repolishingWithNanopolishDN {
 	publishDir params.output + "/de-novo-assembly", mode: 'copy', pattern: '*.dn-assembly.racon.medaka.nanopolish.fasta'
+
+    if (params.debug == true) {
+        publishDir params.output + "/debug/repolishingWithNanopolishDN", mode: 'copy', pattern: 'processOutput.tar'
+    }
+
     input:
         file(assembly) from medaka_polished_dn_assembly_for_repolishing
         set file(reads), file(index), file(fai), file(gzi), file(readdb) from nif_dn_repolishing
 
     output:
 	   file('*.dn-assembly.racon.medaka.nanopolish.fasta') into dn_assembly_medaka_then_nanopolish
+       file('processOutput.tar') into debug1
 
     script:
         """
-        minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
+        minimap2 -ax map-ont -t ${task.cpus} ${assembly} ${reads} | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
         samtools index ${reads.getBaseName()}.assembly-alignment.bam
-        nanopolish_makerange.py "${assembly}" | parallel --results nanopolish.results -P "${task.cpus}" nanopolish variants --consensus -o polished.{1}.vcf -w {1} -r "${reads}" -b ${reads.getBaseName()}.assembly-alignment.bam -g "${assembly}" -t 4 --min-candidate-frequency 0.1
-        nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.*.vcf > assembly.fasta;
+        nanopolish_makerange.py ${assembly} | parallel --results nanopolish.results -P ${task.cpus} nanopolish variants --consensus -o polished.{1}.vcf -w {1} -r ${reads} -b ${reads.getBaseName()}.assembly-alignment.bam -g ${assembly} -t 4 --min-candidate-frequency 0.1
+        nanopolish vcf2fasta --skip-checks -g ${assembly} polished.*.vcf > assembly.fasta;
         awk '/^>/{print ">dn|racon.medaka.nanopolish|contig" ++i; next}{print}' < assembly.fasta > "${assembly.getSimpleName()}".dn-assembly.racon.medaka.nanopolish.fasta
+
+        mkdir processOutput
+        cp ${assembly} ${reads} *.bam *.index *.fai *.gzi *.readdb processOutput/
+        tar -cvf processOutput.tar processOutput        
         """
 }
 
@@ -431,21 +442,30 @@ process repolishingWithNanopolishDN {
 process polishingWithNanopolishDN {
     publishDir params.output + "/de-novo-assembly", mode: 'copy', pattern: '*.dn-assembly.racon.nanopolish.fasta'
 
+    if (params.debug == true) {
+        publishDir params.output + "/debug/polishingWithNanopolishDN", mode: 'copy', pattern: 'processOutput.tar'
+    }
+
     input:
         file(assembly) from dn_assembly_for_nanopolish
         set file(reads), file(index), file(fai), file(gzi), file(readdb) from nif_dn_polishing
 
     output:
         file('*.dn-assembly.racon.nanopolish.fasta') into nanopolished_dn_assembly
+        file('processOutput.tar') into debug2
 
     script:
         """
-        minimap2 -ax map-ont -t "${task.cpus}" "${assembly}" "${reads}" | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
+        minimap2 -ax map-ont -t ${task.cpus} ${assembly} ${reads} | samtools sort -o ${reads.getBaseName()}.assembly-alignment.bam -
         samtools index ${reads.getBaseName()}.assembly-alignment.bam
 
-        nanopolish_makerange.py "${assembly}" | parallel --results nanopolish.results -P "${task.cpus}" nanopolish variants --consensus -o polished.{1}.vcf -w {1} -r "${reads}" -b ${reads.getBaseName()}.assembly-alignment.bam -g "${assembly}" -t 4 --min-candidate-frequency 0.1
-        nanopolish vcf2fasta --skip-checks -g "${assembly}" polished.*.vcf > assembly.fasta;
-        awk '/^>/{print ">dn|racon.nanopolish|contig" ++i; next}{print}' < assembly.fasta > "${assembly.getSimpleName()}".dn-assembly.racon.nanopolish.fasta
+        nanopolish_makerange.py ${assembly} | parallel --results nanopolish.results -P ${task.cpus} nanopolish variants --consensus -o polished.{1}.vcf -w {1} -r ${reads} -b ${reads.getBaseName()}.assembly-alignment.bam -g "${assembly}" -t 4 --min-candidate-frequency 0.1
+        nanopolish vcf2fasta --skip-checks -g ${assembly} polished.*.vcf > assembly.fasta;
+        awk '/^>/{print ">dn|racon.nanopolish|contig" ++i; next}{print}' < assembly.fasta > ${assembly.getSimpleName()}.dn-assembly.racon.nanopolish.fasta
+
+        mkdir processOutput
+        cp ${assembly} ${reads} *.bam *.index *.fai *.gzi *.readdb processOutput/
+        tar -cvf processOutput.tar processOutput
         """
 }
 
