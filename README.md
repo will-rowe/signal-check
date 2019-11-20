@@ -76,7 +76,7 @@ jupyter notebook 1.data-wrangling-and-assembly-pipeline.ipynb
 If you have nextflow and conda installed, you just need:
 
 ```
-nextflow run pipelines/long-read-assembly-pipeline.nf --fastqDir </path/to/fastq_pass> --fast5Dir <path/to/fast5_pass> --refGenomes <path/to/refGenomes> --barcodes 09,10,11 --output <output directory> -profile conda --cpus 6 --mem 12GB
+nextflow run pipelines/long-read-assembly-pipeline.nf --fastqDir </path/to/fastq_pass> --fast5Dir <path/to/fast5_pass> --refGenome <path/to/refGenome> --barcode 09 --output <output directory> -profile conda --cpus 6 --mem 12GB
 ```
 
 > to run using Docker instead, swap the `-profile` over to docker
