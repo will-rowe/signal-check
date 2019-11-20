@@ -4,10 +4,10 @@ fastqDir=${pipelineDir}"/data/ebov-test-data/fastq_pass"
 fast5Dir=${pipelineDir}"/data/ebov-test-data/fast5_pass"
 refGenome=${pipelineDir}"/data/ebov-reference-genomes/NC_002549.fasta"
 resultsDir=${pipelineDir}"/test-results"
-resultCheck1=${resultsDir}"/de-novo-assembly/testing-barcode-09.dn-assembly.racon.fasta"
-resultCheck2=${resultsDir}"/de-novo-assembly/testing-barcode-09.dn-assembly.racon.medaka.fasta"
-resultCheck3=${resultsDir}"/de-novo-assembly/testing-barcode-09.dn-assembly.racon.nanopolish.fasta"
-resultCheck4=${resultsDir}"/reference-guided-assembly/testing-barcode-09.rg-assembly.racon.fasta"
+resultCheck1=${resultsDir}"/de-novo-assembly/testing-barcode-9.dn-assembly.racon.fasta"
+resultCheck2=${resultsDir}"/de-novo-assembly/testing-barcode-9.dn-assembly.racon.medaka.fasta"
+resultCheck3=${resultsDir}"/de-novo-assembly/testing-barcode-9.dn-assembly.racon.nanopolish.fasta"
+resultCheck4=${resultsDir}"/reference-guided-assembly/testing-barcode-9.rg-assembly.racon.fasta"
 
 cd ${pipelineDir}
 
